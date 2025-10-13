@@ -37,9 +37,9 @@ class TestTrajectory3D:
         traj = Trajectory3D(marker_name="test", positions=positions)
         valid_mask = traj.is_valid()
         
-        assert valid_mask[0] is True
-        assert valid_mask[1] is False
-        assert valid_mask[2] is True
+        assert valid_mask[0] == True
+        assert valid_mask[1] == False
+        assert valid_mask[2] == True
     
     def test_is_valid_with_confidence(self) -> None:
         """Should check validity based on confidence threshold."""
@@ -54,9 +54,9 @@ class TestTrajectory3D:
         
         valid_mask = traj.is_valid(min_confidence=0.3)
         
-        assert valid_mask[0] is True
-        assert valid_mask[1] is False
-        assert valid_mask[2] is True
+        assert valid_mask[0] == True
+        assert valid_mask[1] == False
+        assert valid_mask[2] == True
     
     def test_get_valid_positions(self) -> None:
         """Should return only valid positions."""
@@ -116,9 +116,9 @@ class TestObservation2D:
         obs = Observation2D(point_name="test", positions=positions)
         valid_mask = obs.is_valid()
         
-        assert valid_mask[0] is True
-        assert valid_mask[1] is False
-        assert valid_mask[2] is True
+        assert valid_mask[0] == True
+        assert valid_mask[1] == False
+        assert valid_mask[2] == True
 
 
 class TestTrajectoryDataset:

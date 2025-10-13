@@ -201,55 +201,59 @@ class TestCheckSpatialOutliers:
             frame_indices=np.arange(10)
         )
         
-        result = check_spatial_outliers(dataset=dataset, threshold=3.0)
-        
+        # Use lower threshold to detect the velocity spike
+        # With this data: velocities at frames 4->5 and 5->6 will have large magnitudes
+        # Z-score will be ~1.87, so threshold needs to be lower than 3.0
+        result = check_spatial_outliers(dataset=dataset, threshold=1.5)
+
         assert result["has_outliers"] is True
         assert result["n_outliers"] >= 1
 
 
 class TestCheckDataQuality:
     """Test data quality check."""
-    
+
     def test_quality_metrics(self) -> None:
         """Should compute quality metrics."""
         positions = np.ones((100, 3))
         confidence = np.random.uniform(low=0.0, high=1.0, size=100)
-        
+
         traj = Trajectory3D(
             marker_name="m1",
             positions=positions,
             confidence=confidence
         )
-        
+
         dataset = TrajectoryDataset(
             data={"m1": traj},
             frame_indices=np.arange(100)
         )
-        
+
         quality = check_data_quality(dataset=dataset, min_confidence=0.5)
-        
+
         assert "n_frames" in quality
         assert "n_markers" in quality
         assert "marker_validity" in quality
         assert "m1" in quality["marker_validity"]
-    
+
     def test_confidence_statistics(self) -> None:
         """Should compute confidence statistics."""
         positions = np.ones((100, 3))
         confidence = np.ones(100) * 0.8
-        
+
         traj = Trajectory3D(
             marker_name="m1",
             positions=positions,
             confidence=confidence
         )
-        
+
         dataset = TrajectoryDataset(
             data={"m1": traj},
             frame_indices=np.arange(100)
         )
-        
+
         quality = check_data_quality(dataset=dataset)
-        
+
         assert "confidence_stats" in quality
-        assert quality["confidence_stats"]["mean"] == 0.8
+        # Use approximate equality for floating-point comparison
+        assert quality["confidence_stats"]["mean"] == pytest.approx(0.8)

@@ -12,6 +12,9 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import model_validator
+from typing_extensions import Self
+
 from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
 
 
@@ -31,8 +34,9 @@ class Trajectory3D(ArbitraryTypesModel):
     positions: np.ndarray
     confidence: np.ndarray | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    
-    def __post_init__(self) -> None:
+
+    @model_validator(mode='after')
+    def validate(self) -> Self:
         """Validate trajectory data."""
         if self.positions.ndim != 2:
             raise ValueError(f"Positions must be 2D array, got shape {self.positions.shape}")
@@ -45,7 +49,8 @@ class Trajectory3D(ArbitraryTypesModel):
                 raise ValueError(
                     f"Confidence length {len(self.confidence)} != positions length {len(self.positions)}"
                 )
-    
+        return self
+
     @property
     def n_frames(self) -> int:
         """Number of frames in trajectory."""
@@ -159,8 +164,9 @@ class Observation2D(ArbitraryTypesModel):
     positions: np.ndarray
     confidence: np.ndarray | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    
-    def __post_init__(self) -> None:
+
+    @model_validator(mode='after')
+    def validate(self) -> Self:
         """Validate observation data."""
         if self.positions.ndim != 2:
             raise ValueError(f"Positions must be 2D array, got shape {self.positions.shape}")
@@ -173,6 +179,7 @@ class Observation2D(ArbitraryTypesModel):
                 raise ValueError(
                     f"Confidence length {len(self.confidence)} != positions length {len(self.positions)}"
                 )
+        return self
     
     @property
     def n_frames(self) -> int:
@@ -268,7 +275,8 @@ class TrajectoryDataset(ArbitraryTypesModel):
     frame_indices: np.ndarray
     metadata: dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self) -> None:
+    @model_validator(mode='after')
+    def validate(self) -> Self:
         """Validate dataset."""
         if len(self.data) == 0:
             raise ValueError("Dataset must contain at least one trajectory")
@@ -282,6 +290,8 @@ class TrajectoryDataset(ArbitraryTypesModel):
             raise ValueError(
                 f"Frame indices length {len(self.frame_indices)} != trajectory length {n_frames_list[0]}"
             )
+
+        return  self
     
     @property
     def n_frames(self) -> int:

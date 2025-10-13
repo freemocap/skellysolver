@@ -234,93 +234,125 @@ def smooth_trajectories(
 
 
 def remove_outliers(
-    *,
-    dataset: TrajectoryDataset,
-    threshold: float = 5.0,
-    method: str = "velocity"
+        *,
+        dataset: TrajectoryDataset,
+        threshold: float = 5.0,
+        method: str = "velocity"
 ) -> TrajectoryDataset:
     """Remove spatial outliers from dataset.
-    
+
     Args:
         dataset: Dataset to clean
-        threshold: Number of standard deviations for outlier detection
+        threshold: Number of median absolute deviations for outlier detection
         method: Detection method ("velocity" or "position")
-        
+
     Returns:
         Dataset with outliers removed (set to NaN)
     """
     if not dataset.is_3d:
         raise ValueError("Outlier removal only supported for 3D data")
-    
+
     print(f"Removing outliers (method={method}, threshold={threshold})...")
-    
+
     cleaned_data = {}
     n_total_outliers = 0
-    
+
     for marker_name, traj in dataset.data.items():
         if not isinstance(traj, Trajectory3D):
             cleaned_data[marker_name] = traj
             continue
-        
+
         positions = traj.positions.copy()
-        
+        outlier_mask = np.zeros(len(positions), dtype=bool)
+
         if method == "velocity":
-            # Velocity-based outlier detection
+            # Velocity-based outlier detection using MAD (Median Absolute Deviation)
             velocities = np.diff(positions, axis=0)
             speeds = np.linalg.norm(velocities, axis=1)
-            
+
             valid_speeds = speeds[~np.isnan(speeds)]
             if len(valid_speeds) < 2:
                 cleaned_data[marker_name] = traj
                 continue
-            
-            mean_speed = np.mean(valid_speeds)
-            std_speed = np.std(valid_speeds)
-            
-            if std_speed > 0:
-                z_scores = np.abs((speeds - mean_speed) / std_speed)
-                outlier_frames = np.where(z_scores > threshold)[0] + 1
-                
-                # Set outlier positions to NaN
-                positions[outlier_frames] = np.nan
-                n_total_outliers += len(outlier_frames)
-        
+
+            # Use median and MAD for robust outlier detection
+            median_speed = np.median(valid_speeds)
+            mad = np.median(np.abs(valid_speeds - median_speed))
+
+            # Avoid division by zero and handle tight distributions
+            if mad < 1e-10:
+                # If MAD is zero, distribution is very tight - use std as fallback
+                # with a more sensitive threshold
+                std_speed = np.std(valid_speeds)
+                if std_speed > 0:
+                    modified_z_scores = np.abs((speeds - median_speed) / std_speed)
+                    # Use lower threshold for tight distributions
+                    effective_threshold = min(threshold / 2.0, 2.0)
+                else:
+                    cleaned_data[marker_name] = traj
+                    continue
+            else:
+                # Modified z-score using MAD
+                # Factor 1.4826 makes MAD consistent with std for normal distribution
+                modified_z_scores = np.abs((speeds - median_speed) / (1.4826 * mad))
+                effective_threshold = threshold
+
+            # Find outlier velocities
+            outlier_velocities = modified_z_scores > effective_threshold
+
+            # Mark frames involved in outlier velocities
+            # If velocity i (from frame i to i+1) is an outlier,
+            # mark both frames i and i+1 as potential outliers
+            for i in np.where(outlier_velocities)[0]:
+                outlier_mask[i] = True
+                outlier_mask[i + 1] = True
+
         elif method == "position":
-            # Position-based outlier detection (deviation from centroid)
+            # Position-based outlier detection using MAD
             centroid = traj.get_centroid()
             distances = np.linalg.norm(positions - centroid, axis=1)
-            
+
             valid_distances = distances[~np.isnan(distances)]
             if len(valid_distances) < 2:
                 cleaned_data[marker_name] = traj
                 continue
-            
-            mean_dist = np.mean(valid_distances)
-            std_dist = np.std(valid_distances)
-            
-            if std_dist > 0:
-                z_scores = np.abs((distances - mean_dist) / std_dist)
-                outlier_frames = np.where(z_scores > threshold)[0]
-                
-                positions[outlier_frames] = np.nan
-                n_total_outliers += len(outlier_frames)
-        
+
+            median_dist = np.median(valid_distances)
+            mad = np.median(np.abs(valid_distances - median_dist))
+
+            if mad < 1e-10:
+                # Tight distribution - use std with adjusted threshold
+                std_dist = np.std(valid_distances)
+                if std_dist > 0:
+                    modified_z_scores = np.abs((distances - median_dist) / std_dist)
+                    effective_threshold = min(threshold / 2.0, 2.0)
+                else:
+                    cleaned_data[marker_name] = traj
+                    continue
+            else:
+                modified_z_scores = np.abs((distances - median_dist) / (1.4826 * mad))
+                effective_threshold = threshold
+
+            outlier_mask = modified_z_scores > effective_threshold
+
+        # Set outlier positions to NaN
+        positions[outlier_mask] = np.nan
+        n_total_outliers += np.sum(outlier_mask)
+
         cleaned_data[marker_name] = Trajectory3D(
             marker_name=marker_name,
             positions=positions,
             confidence=traj.confidence,
             metadata=traj.metadata
         )
-    
+
     print(f"  ✓ Removed {n_total_outliers} outlier points")
-    
+
     return TrajectoryDataset(
         data=cleaned_data,
         frame_indices=dataset.frame_indices,
         metadata=dataset.metadata
     )
-
-
 def center_data(
     *,
     dataset: TrajectoryDataset,
