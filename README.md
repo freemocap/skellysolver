@@ -1,0 +1,2 @@
+# skellysolver
+For solving skellies 
