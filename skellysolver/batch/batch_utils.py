@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any, Callable
 from copy import deepcopy
 
-from .config import BatchConfig, BatchJobConfig, ParameterSweepConfig
-from ..pipelines.base import PipelineConfig
+from skellysolver.batch.batch_config import BatchConfig, BatchJobConfig, ParameterSweepConfig
+from skellysolver.pipelines import PipelineConfig
 
 
 def create_batch_from_files(

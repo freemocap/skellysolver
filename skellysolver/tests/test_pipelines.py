@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from skellysolver.pipelines.rigid_body import RigidBodyPipeline, RigidBodyConfig
 from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig
-from skellysolver.core.topology import RigidBodyTopology
 from skellysolver.core.result import RigidBodyResult
+from skellysolver.pipelines import RigidBodyConfig, RigidBodyPipeline
+from skellysolver.pipelines.topology import RigidBodyTopology
 
 
 class TestRigidBodyPipeline:

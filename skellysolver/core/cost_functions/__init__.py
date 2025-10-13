@@ -15,7 +15,7 @@ Usage:
     from skellysolver.core.cost_functions import Point3DMeasurementCost
 """
 
-from .base import BaseCostFunction
+from .base_cost import BaseCostFunction
 from .smoothness import (
     RotationSmoothnessCost,
     TranslationSmoothnessCost,

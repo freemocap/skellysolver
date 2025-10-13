@@ -9,8 +9,10 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
 
-class BaseWriter(ABC):
+
+class BaseWriter(ArbitraryTypesModel,ABC):
     """Abstract base class for all data writers.
     
     Provides standard interface for writing files.

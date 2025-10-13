@@ -5,14 +5,14 @@ Configuration classes for processing multiple datasets in batch.
 
 import numpy as np
 from pathlib import Path
-from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from ..pipelines.base import PipelineConfig
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
+from pydantic import Field
+from skellysolver.pipelines import PipelineConfig
 
 
-@dataclass
-class BatchJobConfig:
+class BatchJobConfig(ArbitraryTypesModel):
     """Configuration for a single batch job.
     
     Each job processes one dataset with one configuration.
@@ -29,7 +29,7 @@ class BatchJobConfig:
     job_name: str
     pipeline_config: PipelineConfig
     priority: int = 0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     
     def __post_init__(self) -> None:
         """Validate job config."""
@@ -37,8 +37,8 @@ class BatchJobConfig:
             raise ValueError("job_id cannot be empty")
 
 
-@dataclass
-class BatchConfig:
+
+class BatchConfig(ArbitraryTypesModel):
     """Configuration for batch processing.
     
     Defines how to process multiple jobs.
@@ -62,7 +62,7 @@ class BatchConfig:
     continue_on_error: bool = True
     save_intermediate: bool = True
     generate_summary_report: bool = True
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     
     def __post_init__(self) -> None:
         """Validate batch config and setup output."""
@@ -117,8 +117,8 @@ class BatchConfig:
         return max(cpu_count - 1, 1)
 
 
-@dataclass
-class ParameterSweepConfig:
+
+class ParameterSweepConfig(ArbitraryTypesModel):
     """Configuration for parameter sweep.
     
     Automatically generates batch jobs with different parameter values.

@@ -20,7 +20,7 @@ import logging
 from typing import Any
 
 from .config import OptimizationConfig
-from .cost_function import get_quaternion_manifold
+from .cost_functions import get_quaternion_manifold
 from .result import OptimizationResult
 
 logger = logging.getLogger(__name__)

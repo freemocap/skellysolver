@@ -9,32 +9,31 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass
 
-from ..base import BasePipeline, PipelineConfig
+from numpydantic import Shape
+from numpydantic.ndarray import NDArray
+from pydantic import BaseModel
+
 from skellysolver.core.config import OptimizationConfig, EyeTrackingWeightConfig
+from skellysolver.core.cost_functions import RotationSmoothnessCost, ScalarSmoothnessCost
 from skellysolver.core.result import OptimizationResult, EyeTrackingResult
 from skellysolver.core.optimizer import Optimizer
-from ...core.cost_functions import (
-    ScalarSmoothnessCost,
-    RotationSmoothnessCost,
-    get_quaternion_manifold,
-)
 from skellysolver.data.base_data import TrajectoryDataset
 from skellysolver.data.loaders import load_trajectories
 from skellysolver.data.validators import validate_dataset
 from skellysolver.data.preprocessing import filter_by_confidence
+from skellysolver.pipelines import PipelineConfig, BasePipeline
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class EyeModel:
+class EyeModel(BaseModel):
     """Eye model parameters."""
     
-    eyeball_center_mm: np.ndarray  # (3,) center position
+    eyeball_center_mm: NDArray[Shape["3 xyz"], float]  # (3,) center position
     base_semi_major_mm: float      # Pupil semi-major axis
     base_semi_minor_mm: float      # Pupil semi-minor axis
     pupil_roundness: float         # Shape parameter (2=ellipse)
-    tear_duct_xyz_mm: np.ndarray   # (3,) tear duct position
+    tear_duct_xyz_mm: NDArray[Shape["3 xyz"], float]  # (3,) tear duct position
     
     @classmethod
     def create_initial_guess(
@@ -99,7 +98,6 @@ class CameraIntrinsics:
         )
 
 
-@dataclass
 class EyeTrackingConfig(PipelineConfig):
     """Configuration for eye tracking pipeline.
     

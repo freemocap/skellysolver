@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class BaseCostFunction(pyceres.CostFunction, ABC):
+class BaseCostFunction(pyceres.CostFunction):
     """Abstract base class for all SkellySolver cost functions.
     
     Provides:
@@ -32,7 +32,6 @@ class BaseCostFunction(pyceres.CostFunction, ABC):
         super().__init__()
         self.weight = weight
     
-    @abstractmethod
     def _compute_residual(
         self,
         parameters: list[np.ndarray]

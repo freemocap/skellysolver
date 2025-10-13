@@ -19,15 +19,16 @@ from dataclasses import dataclass, field
 from typing import Any
 import time
 
-from ..core.config import OptimizationConfig, ParallelConfig
-from ..core.result import OptimizationResult
-from ..data.base_data import TrajectoryDataset
+from pydantic import BaseModel, Field, ConfigDict
+
+from skellysolver.core import OptimizationConfig, ParallelConfig, OptimizationResult
+from skellysolver.data import TrajectoryDataset
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class PipelineConfig:
+class PipelineConfig(ArbitraryTypesModel):
     """Base configuration for all pipelines.
     
     All pipeline configs inherit from this.
@@ -39,12 +40,12 @@ class PipelineConfig:
         parallel: Parallel processing configuration (optional)
         metadata: Additional pipeline-specific metadata
     """
-    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     input_path: Path
     output_dir: Path
     optimization: OptimizationConfig
     parallel: ParallelConfig | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     
     def __post_init__(self) -> None:
         """Ensure paths are Path objects and output dir exists."""
@@ -53,7 +54,7 @@ class PipelineConfig:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
 
-class BasePipeline(ABC):
+class BasePipeline(ArbitraryTypesModel,ABC):
     """Abstract base class for all SkellySolver pipelines.
     
     Defines standard pipeline interface that all pipelines must implement.
@@ -81,18 +82,12 @@ class BasePipeline(ABC):
         pipeline = MyPipeline(config=config)
         result = pipeline.run()
     """
-    
-    def __init__(self, *, config: PipelineConfig) -> None:
-        """Initialize pipeline.
-        
-        Args:
-            config: Pipeline configuration
-        """
-        self.config = config
-        self.data: TrajectoryDataset | None = None
-        self.result: OptimizationResult | None = None
-        self.metrics: dict[str, Any] = {}
-        self.timing: dict[str, float] = {}
+    config: PipelineConfig
+    data: TrajectoryDataset | None = None
+    result: OptimizationResult | None = None
+    metrics: dict[str, Any] = {}
+    timing: dict[str, float] = {}
+
     
     def run(self) -> OptimizationResult:
         """Run complete pipeline.

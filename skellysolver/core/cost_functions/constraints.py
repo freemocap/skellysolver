@@ -16,7 +16,7 @@ from scipy.spatial.transform import Rotation
 import pyceres
 from typing import Any
 
-from .base import BaseCostFunction
+from .base_cost import BaseCostFunction
 
 
 class RigidEdgeCost(BaseCostFunction):

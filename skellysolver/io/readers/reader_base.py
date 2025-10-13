@@ -9,8 +9,10 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
 
-class BaseReader(ABC):
+
+class BaseReader(ArbitraryTypesModel,ABC):
     """Abstract base class for all data readers.
     
     Provides standard interface for reading files.

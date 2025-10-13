@@ -11,7 +11,7 @@ import numpy as np
 from pathlib import Path
 from typing import Any
 
-from .base import CSVReader
+from skellysolver.io.readers.reader_base import CSVReader
 
 
 class TidyCSVReader(CSVReader):

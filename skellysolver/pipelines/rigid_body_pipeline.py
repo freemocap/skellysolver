@@ -13,7 +13,7 @@ from skellysolver.pipelines.topology import RigidBodyTopology
 from skellysolver.pipelines.metrics import evaluate_reconstruction
 from skellysolver.pipelines.savers import save_topology_json, save_trajectory_csv, save_evaluation_report
 from skellysolver.core.config import RigidBodyWeightConfig
-from skellysolver.core.cost_function import RigidPoint3DMeasurementBundleAdjustment, RigidEdgeCost, SoftEdgeCost, \
+from skellysolver.core.cost_functions import RigidPoint3DMeasurementBundleAdjustment, RigidEdgeCost, SoftEdgeCost, \
     RotationSmoothnessCost, TranslationSmoothnessCost, ReferenceAnchorCost
 from skellysolver.core.result import RigidBodyResult
 from skellysolver.core.optimizer import Optimizer
@@ -32,7 +32,6 @@ from skellysolver.pipelines import PipelineConfig, BasePipeline
 logger = logging.getLogger(__name__)
 
 
-@dataclass
 class RigidBodyConfig(PipelineConfig):
     """Configuration for rigid body tracking pipeline.
     

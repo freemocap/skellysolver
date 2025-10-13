@@ -14,9 +14,8 @@ from pathlib import Path
 from typing import Any
 import shutil
 
-from .base import BaseWriter
-from .csv_writer import TrajectoryCSVWriter, EyeTrackingCSVWriter
-from ...core.result import OptimizationResult, RigidBodyResult, EyeTrackingResult
+from skellysolver.core import RigidBodyResult, EyeTrackingResult, OptimizationResult
+from skellysolver.io.writers.csv_writer import TrajectoryCSVWriter, EyeTrackingCSVWriter
 
 
 class ResultsWriter:

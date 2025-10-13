@@ -12,9 +12,10 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Any
 
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
 
-@dataclass
-class Trajectory3D:
+
+class Trajectory3D(ArbitraryTypesModel):
     """3D trajectory data for a single marker.
     
     Used by rigid body tracking to store marker positions over time.
@@ -141,8 +142,8 @@ class Trajectory3D:
         )
 
 
-@dataclass
-class Observation2D:
+
+class Observation2D(ArbitraryTypesModel):
     """2D observation data for a single point.
     
     Used by eye tracking and camera calibration to store image points.
@@ -250,8 +251,8 @@ class Observation2D:
         )
 
 
-@dataclass
-class TrajectoryDataset:
+
+class TrajectoryDataset(ArbitraryTypesModel):
     """Collection of trajectories or observations with metadata.
     
     Can contain either 3D trajectories or 2D observations.

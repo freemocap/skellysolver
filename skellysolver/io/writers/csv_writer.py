@@ -11,7 +11,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Any
 
-from .base import CSVWriter
+from skellysolver.io.writers.writer_base import CSVWriter
 
 
 class TrajectoryCSVWriter(CSVWriter):

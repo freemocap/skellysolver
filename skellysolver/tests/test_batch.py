@@ -7,16 +7,12 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from skellysolver.batch.config import BatchConfig, BatchJobConfig, ParameterSweepConfig
-from skellysolver.batch.processor import BatchProcessor, BatchResult
-from skellysolver.batch.utils import (
-    create_batch_from_files,
-    create_parameter_sweep,
-    estimate_batch_time,
-)
-from skellysolver.pipelines.rigid_body import RigidBodyConfig
+from skellysolver.batch.batch_config import BatchConfig, BatchJobConfig, ParameterSweepConfig
+from skellysolver.batch.batch_processor import BatchJobResult, BatchResult
+from skellysolver.batch.batch_utils import create_parameter_sweep, estimate_batch_time, create_batch_from_files
 from skellysolver.core import OptimizationConfig
-from skellysolver.core.topology import RigidBodyTopology
+from skellysolver.pipelines import RigidBodyConfig
+from skellysolver.pipelines.topology import RigidBodyTopology
 
 
 class TestBatchConfig:
@@ -273,8 +269,7 @@ class TestBatchResult:
     
     def test_batch_result_creation(self) -> None:
         """Should create batch result."""
-        from skellysolver.batch.processor import BatchJobResult, BatchResult
-        
+
         job_results = [
             BatchJobResult(
                 job_id="job_001",
@@ -305,8 +300,7 @@ class TestBatchResult:
     
     def test_batch_result_summary(self) -> None:
         """Should generate summary."""
-        from skellysolver.batch.processor import BatchJobResult, BatchResult
-        
+
         job_result = BatchJobResult(
             job_id="job_001",
             job_name="Job 1",

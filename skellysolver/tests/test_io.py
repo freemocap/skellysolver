@@ -8,20 +8,11 @@ import pytest
 from pathlib import Path
 import json
 
-from skellysolver.io.readers import (
-    TidyCSVReader,
-    WideCSVReader,
-    DLCCSVReader,
-    JSONReader,
-    NPYReader,
-)
-from skellysolver.io.writers import (
-    TrajectoryCSVWriter,
-    SimpleTrajectoryCSVWriter,
-    JSONWriter,
-    NPYWriter,
-    ResultsWriter,
-)
+from skellysolver.io.readers.csv_reader import TidyCSVReader, WideCSVReader, DLCCSVReader
+from skellysolver.io.readers.reader_base import JSONReader, NPYReader
+from skellysolver.io.writers.csv_writer import TrajectoryCSVWriter, SimpleTrajectoryCSVWriter
+from skellysolver.io.writers.results_writer import ResultsWriter
+from skellysolver.io.writers.writer_base import JSONWriter, NPYWriter
 
 
 class TestCSVReaders:

@@ -11,19 +11,20 @@ import numpy as np
 import time
 import logging
 from pathlib import Path
-from dataclasses import dataclass, field
 from typing import Any
 import multiprocessing as mp
 
-from .config import BatchConfig, BatchJobConfig
-from ..pipelines.base import BasePipeline
-from ..core.result import OptimizationResult
+from pydantic import Field
+
+from skellysolver.batch.batch_config import BatchConfig, BatchJobConfig
+from skellysolver.core import OptimizationResult
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
+from skellysolver.pipelines import PipelineConfig, BasePipeline
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class BatchJobResult:
+class BatchJobResult(ArbitraryTypesModel):
     """Result from a single batch job.
     
     Attributes:
@@ -46,7 +47,7 @@ class BatchJobResult:
     start_time: float = 0.0
     end_time: float = 0.0
     duration_seconds: float = 0.0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     
     @property
     def cost_reduction_percent(self) -> float:
@@ -60,8 +61,8 @@ class BatchJobResult:
         return self.optimization_result.cost_reduction_percent
 
 
-@dataclass
-class BatchResult:
+
+class BatchResult(ArbitraryTypesModel):
     """Results from batch processing.
     
     Attributes:
@@ -80,7 +81,7 @@ class BatchResult:
     n_jobs_total: int
     n_jobs_successful: int
     n_jobs_failed: int
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     
     @property
     def success_rate(self) -> float:
@@ -164,7 +165,7 @@ class BatchResult:
         return "\n".join(lines)
 
 
-class BatchProcessor:
+class BatchProcessor(ArbitraryTypesModel):
     """Process multiple optimization jobs in batch.
     
     Handles:
@@ -180,14 +181,8 @@ class BatchProcessor:
         result = processor.run()
     """
     
-    def __init__(self, *, config: BatchConfig) -> None:
-        """Initialize batch processor.
-        
-        Args:
-            config: Batch configuration
-        """
-        self.config = config
-        self.job_results: list[BatchJobResult] = []
+    config: BatchConfig
+    job_results: list[BatchJobResult] = []
     
     def run(self) -> BatchResult:
         """Run all jobs in batch.
@@ -360,10 +355,10 @@ class BatchProcessor:
         config_class_name = config.__class__.__name__
         
         if "RigidBody" in config_class_name:
-            from ..pipelines.rigid_body import RigidBodyPipeline
+            from ..pipelines.rigid_body_pipeline import RigidBodyPipeline
             return RigidBodyPipeline(config=config)
         elif "EyeTracking" in config_class_name:
-            from ..pipelines.eye_tracking import EyeTrackingPipeline
+            from ..pipelines.eye_pipeline  import EyeTrackingPipeline
             return EyeTrackingPipeline(config=config)
         else:
             raise ValueError(f"Unknown pipeline config type: {config_class_name}")
