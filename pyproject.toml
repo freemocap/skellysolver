@@ -1,0 +1,26 @@
+[project]
+name = "skellysolver"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.2.6",
+    "numpydantic>=1.7.0",
+    "pandas>=2.3.3",
+    "pyceres>=2.5",
+    "pydantic>=2.12.0",
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.8.0",
+    "scipy>=1.15.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.8.0",
+]
