@@ -12,7 +12,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Any
 
-from .processor import BatchResult, BatchJobResult
+from .batch_processor  import BatchResult, BatchJobResult
 
 
 class BatchReportGenerator:

@@ -84,7 +84,7 @@ class TestParallelConfig:
     
     def test_get_num_workers(self) -> None:
         """Should get number of workers."""
-        config = ParallelConfig(max_workers=None)
+        config = ParallelConfig()
         n_workers = config.get_num_workers()
         
         assert n_workers >= 1

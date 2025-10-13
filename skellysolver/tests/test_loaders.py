@@ -16,7 +16,7 @@ from skellysolver.data.loaders import (
     concatenate_datasets,
 )
 from skellysolver.data.formats import detect_csv_format
-from skellysolver.data.base_data import TrajectoryDataset
+from skellysolver.data.base_data import TrajectoryDataset, Trajectory3D
 
 
 class TestTidyFormatLoader:

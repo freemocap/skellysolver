@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from numpydantic import Shape
 from numpydantic.ndarray import NDArray
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from skellysolver.core.config import OptimizationConfig, EyeTrackingWeightConfig
 from skellysolver.core.cost_functions import RotationSmoothnessCost, ScalarSmoothnessCost
@@ -28,13 +28,13 @@ logger = logging.getLogger(__name__)
 
 class EyeModel(BaseModel):
     """Eye model parameters."""
-    
+
     eyeball_center_mm: NDArray[Shape["3 xyz"], float]  # (3,) center position
     base_semi_major_mm: float      # Pupil semi-major axis
     base_semi_minor_mm: float      # Pupil semi-minor axis
     pupil_roundness: float         # Shape parameter (2=ellipse)
     tear_duct_xyz_mm: NDArray[Shape["3 xyz"], float]  # (3,) tear duct position
-    
+
     @classmethod
     def create_initial_guess(
         cls,
@@ -57,35 +57,35 @@ class EyeModel(BaseModel):
 @dataclass
 class CameraIntrinsics:
     """Camera intrinsic parameters."""
-    
+
     focal_length_mm: float
     sensor_width_mm: float
     sensor_height_mm: float
     image_width_px: int
     image_height_px: int
-    
+
     @property
     def fx(self) -> float:
         """Focal length in x (pixels)."""
         pixel_size_x = self.sensor_width_mm / self.image_width_px
         return self.focal_length_mm / pixel_size_x
-    
+
     @property
     def fy(self) -> float:
         """Focal length in y (pixels)."""
         pixel_size_y = self.sensor_height_mm / self.image_height_px
         return self.focal_length_mm / pixel_size_y
-    
+
     @property
     def cx(self) -> float:
         """Principal point x (pixels)."""
         return self.image_width_px / 2.0
-    
+
     @property
     def cy(self) -> float:
         """Principal point y (pixels)."""
         return self.image_height_px / 2.0
-    
+
     @classmethod
     def create_pupil_labs_camera(cls) -> "CameraIntrinsics":
         """Create Pupil Labs eye camera specs."""
@@ -100,9 +100,9 @@ class CameraIntrinsics:
 
 class EyeTrackingConfig(PipelineConfig):
     """Configuration for eye tracking pipeline.
-    
+
     Extends PipelineConfig with eye tracking specific settings.
-    
+
     Attributes:
         camera: Camera intrinsics
         weights: Cost function weights
@@ -110,22 +110,23 @@ class EyeTrackingConfig(PipelineConfig):
         min_confidence: Minimum confidence for filtering
         min_pupil_points: Minimum valid pupil points per frame
     """
-    
+
     camera: CameraIntrinsics
-    weights: EyeTrackingWeightConfig = None
-    initial_eye_model: EyeModel = None
+    weights: EyeTrackingWeightConfig | None = None
+    initial_eye_model: EyeModel | None = None
     min_confidence: float = 0.3
     min_pupil_points: int = 6
-    
-    def __post_init__(self) -> None:
+
+    @model_validator(mode='after')
+    def set_defaults(self) -> 'EyeTrackingConfig':
         """Set defaults."""
-        super().__post_init__()
-        
         if self.weights is None:
             self.weights = EyeTrackingWeightConfig()
-        
+
         if self.initial_eye_model is None:
             self.initial_eye_model = EyeModel.create_initial_guess()
+
+        return self
 
 
 class EyeTrackingPipeline(BasePipeline):
