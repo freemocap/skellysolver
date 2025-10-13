@@ -9,8 +9,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 import shutil
 
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
 
-class BaseViewerGenerator(ABC):
+
+class BaseViewerGenerator(ArbitraryTypesModel,ABC):
     """Abstract base class for viewer generators.
     
     All viewers inherit from this and implement:
@@ -19,9 +21,7 @@ class BaseViewerGenerator(ABC):
     - _prepare_data(): Prepare data for embedding
     """
     
-    def __init__(self) -> None:
-        """Initialize viewer generator."""
-        self.last_generated_path: Path | None = None
+    last_generated_path: Path | None = None
     
     @abstractmethod
     def generate(
@@ -156,16 +156,8 @@ class HTMLViewerGenerator(BaseViewerGenerator):
     
     Can generate viewers from templates with placeholder replacement.
     """
-    
-    def __init__(self, *, template_path: Path) -> None:
-        """Initialize HTML viewer generator.
-        
-        Args:
-            template_path: Path to HTML template
-        """
-        super().__init__()
-        self.template_path = template_path
-    
+    template_path: Path
+
     def _get_template_path(self) -> Path:
         """Get template path.
         

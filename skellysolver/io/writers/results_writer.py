@@ -15,33 +15,50 @@ from typing import Any
 import shutil
 
 from skellysolver.core import RigidBodyResult, EyeTrackingResult, OptimizationResult
+from skellysolver.io.writers.writer_base import BaseWriter
 from skellysolver.io.writers.csv_writer import TrajectoryCSVWriter, EyeTrackingCSVWriter
 
 
-class ResultsWriter:
+class ResultsWriter(BaseWriter):
     """Unified writer for optimization results.
-    
+
     Handles saving for all pipeline types:
     - Rigid body tracking
     - Eye tracking
     - Custom pipelines
-    
+
     Saves:
     - CSV files with trajectory/observation data
     - JSON files with metrics and configuration
     - NPY files with arrays (reference geometry, quaternions, etc.)
     - HTML viewer (optional)
     """
-    
-    def __init__(self, *, output_dir: Path) -> None:
-        """Initialize results writer.
-        
+    output_dir: Path
+
+    def write(
+        self,
+        *,
+        filepath: Path,
+        data: dict[str, Any]
+    ) -> None:
+        """Write results (delegates to specialized save methods).
+
+        This method exists to satisfy the BaseWriter interface.
+        Use the specialized save_* methods directly for better control.
+
         Args:
-            output_dir: Directory for output files
+            filepath: Not used (output_dir is used instead)
+            data: Dictionary with result type and data
+
+        Raises:
+            NotImplementedError: Use save_rigid_body_results(), save_eye_tracking_results(),
+                or save_generic_results() instead
         """
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-    
+        raise NotImplementedError(
+            "Use save_rigid_body_results(), save_eye_tracking_results(), "
+            "or save_generic_results() instead of write()"
+        )
+
     def save_rigid_body_results(
         self,
         *,
@@ -55,14 +72,14 @@ class ResultsWriter:
         viewer_template_path: Path | None = None
     ) -> None:
         """Save complete rigid body tracking results.
-        
+
         Saves:
         - trajectory_data.csv: Noisy and optimized trajectories
         - topology.json: Topology metadata
         - metrics.json: Evaluation metrics
         - reference_geometry.npy: Optimized reference shape
         - rigid_body_viewer.html: Interactive viewer (optional)
-        
+
         Args:
             result: Optimization result
             noisy_data: (n_frames, n_markers, 3) noisy measurements
@@ -74,7 +91,8 @@ class ResultsWriter:
             viewer_template_path: Path to viewer template
         """
         print(f"\nSaving rigid body results to {self.output_dir}...")
-        
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
         # Save trajectory CSV
         print("  Saving trajectory_data.csv...")
         traj_writer = TrajectoryCSVWriter()
@@ -87,7 +105,7 @@ class ResultsWriter:
                 "ground_truth_data": ground_truth_data,
             }
         )
-        
+
         # Save topology JSON
         print("  Saving topology.json...")
         topology_data = {
@@ -97,10 +115,10 @@ class ResultsWriter:
             "n_markers": result.n_markers,
             "has_ground_truth": ground_truth_data is not None,
         }
-        
+
         with open(self.output_dir / "topology.json", mode='w') as f:
             json.dump(obj=topology_data, fp=f, indent=2)
-        
+
         # Save metrics JSON
         print("  Saving metrics.json...")
         metrics_data = {
@@ -113,31 +131,31 @@ class ResultsWriter:
                 "solve_time_seconds": result.solve_time_seconds,
             }
         }
-        
+
         with open(self.output_dir / "metrics.json", mode='w') as f:
             json.dump(obj=metrics_data, fp=f, indent=2)
-        
+
         # Save reference geometry
         print("  Saving reference_geometry.npy...")
         np.save(
             file=self.output_dir / "reference_geometry.npy",
             arr=result.reference_geometry
         )
-        
+
         # Save rotations
         print("  Saving rotations.npy...")
         np.save(
             file=self.output_dir / "rotations.npy",
             arr=result.rotations
         )
-        
+
         # Save translations
         print("  Saving translations.npy...")
         np.save(
             file=self.output_dir / "translations.npy",
             arr=result.translations
         )
-        
+
         # Copy viewer
         if copy_viewer and viewer_template_path is not None:
             if viewer_template_path.exists():
@@ -148,9 +166,9 @@ class ResultsWriter:
                 )
             else:
                 print(f"  ⚠ Viewer template not found: {viewer_template_path}")
-        
+
         print(f"✓ Results saved to {self.output_dir}")
-    
+
     def save_eye_tracking_results(
         self,
         *,
@@ -160,7 +178,7 @@ class ResultsWriter:
         viewer_template_path: Path | None = None
     ) -> None:
         """Save complete eye tracking results.
-        
+
         Saves:
         - eye_tracking_results.csv: Gaze directions, angles, scales
         - metrics.json: Evaluation metrics
@@ -168,7 +186,7 @@ class ResultsWriter:
         - pupil_scales.npy: Pupil dilation
         - gaze_directions.npy: Gaze vectors
         - eye_tracking_viewer.html: Interactive viewer (optional)
-        
+
         Args:
             result: Optimization result
             metrics: Evaluation metrics
@@ -176,29 +194,30 @@ class ResultsWriter:
             viewer_template_path: Path to viewer template
         """
         print(f"\nSaving eye tracking results to {self.output_dir}...")
-        
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
         # Save eye tracking CSV
         print("  Saving eye_tracking_results.csv...")
         eye_writer = EyeTrackingCSVWriter()
-        
+
         eye_data = {
             "frame_indices": np.arange(result.n_frames),
             "gaze_directions": result.gaze_directions,
             "pupil_scales": result.pupil_scales,
         }
-        
+
         # Add optional fields
         if result.pupil_centers_3d is not None:
             eye_data["pupil_centers_3d"] = result.pupil_centers_3d
-        
+
         if result.pupil_errors is not None:
             eye_data["reprojection_errors"] = result.pupil_errors
-        
+
         eye_writer.write(
             filepath=self.output_dir / "eye_tracking_results.csv",
             data=eye_data
         )
-        
+
         # Save metrics JSON
         print("  Saving metrics.json...")
         metrics_data = {
@@ -211,31 +230,31 @@ class ResultsWriter:
                 "solve_time_seconds": result.solve_time_seconds,
             }
         }
-        
+
         with open(self.output_dir / "metrics.json", mode='w') as f:
             json.dump(obj=metrics_data, fp=f, indent=2)
-        
+
         # Save quaternions
         print("  Saving quaternions.npy...")
         np.save(
             file=self.output_dir / "quaternions.npy",
             arr=result.rotations
         )
-        
+
         # Save pupil scales
         print("  Saving pupil_scales.npy...")
         np.save(
             file=self.output_dir / "pupil_scales.npy",
             arr=result.pupil_scales
         )
-        
+
         # Save gaze directions
         print("  Saving gaze_directions.npy...")
         np.save(
             file=self.output_dir / "gaze_directions.npy",
             arr=result.gaze_directions
         )
-        
+
         # Copy viewer
         if copy_viewer and viewer_template_path is not None:
             if viewer_template_path.exists():
@@ -246,9 +265,9 @@ class ResultsWriter:
                 )
             else:
                 print(f"  ⚠ Viewer template not found: {viewer_template_path}")
-        
+
         print(f"✓ Results saved to {self.output_dir}")
-    
+
     def save_generic_results(
         self,
         *,
@@ -257,16 +276,17 @@ class ResultsWriter:
         additional_arrays: dict[str, np.ndarray] | None = None
     ) -> None:
         """Save generic optimization results.
-        
+
         For custom pipelines that don't fit rigid body or eye tracking.
-        
+
         Args:
             result: Optimization result
             metrics: Evaluation metrics
             additional_arrays: Optional additional numpy arrays to save
         """
         print(f"\nSaving generic results to {self.output_dir}...")
-        
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
         # Save metrics JSON
         print("  Saving metrics.json...")
         metrics_data = {
@@ -279,10 +299,10 @@ class ResultsWriter:
                 "solve_time_seconds": result.solve_time_seconds,
             }
         }
-        
+
         with open(self.output_dir / "metrics.json", mode='w') as f:
             json.dump(obj=metrics_data, fp=f, indent=2)
-        
+
         # Save any arrays in result
         if result.reconstructed is not None:
             print("  Saving reconstructed.npy...")
@@ -290,21 +310,21 @@ class ResultsWriter:
                 file=self.output_dir / "reconstructed.npy",
                 arr=result.reconstructed
             )
-        
+
         if result.rotations is not None:
             print("  Saving rotations.npy...")
             np.save(
                 file=self.output_dir / "rotations.npy",
                 arr=result.rotations
             )
-        
+
         if result.translations is not None:
             print("  Saving translations.npy...")
             np.save(
                 file=self.output_dir / "translations.npy",
                 arr=result.translations
             )
-        
+
         # Save additional arrays
         if additional_arrays is not None:
             for name, array in additional_arrays.items():
@@ -313,5 +333,5 @@ class ResultsWriter:
                     file=self.output_dir / f"{name}.npy",
                     arr=array
                 )
-        
+
         print(f"✓ Results saved to {self.output_dir}")

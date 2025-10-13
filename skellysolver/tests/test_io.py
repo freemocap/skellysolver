@@ -8,7 +8,7 @@ import pytest
 from pathlib import Path
 import json
 
-from skellysolver.io.readers.csv_reader import TidyCSVReader, WideCSVReader, DLCCSVReader
+from skellysolver.io import TidyCSVReader, WideCSVReader, DLCCSVReader
 from skellysolver.io.readers.reader_base import JSONReader, NPYReader
 from skellysolver.io.writers.csv_writer import TrajectoryCSVWriter, SimpleTrajectoryCSVWriter
 from skellysolver.io.writers.results_writer import ResultsWriter
@@ -200,10 +200,40 @@ class TestResultsWriter:
         assert writer.output_dir == temp_dir
         assert temp_dir.exists()
     
-    def test_write_creates_directory(self, temp_dir: Path) -> None:
-        """Should create output directory if doesn't exist."""
+    def test_directory_created_on_save(self, temp_dir: Path) -> None:
+        """Should create output directory when saving results."""
         output_dir = temp_dir / "new_dir"
-        
+
+        # Directory shouldn't exist yet
+        assert not output_dir.exists()
+
         writer = ResultsWriter(output_dir=output_dir)
-        
+
+        # Directory still shouldn't exist after instantiation
+        assert not output_dir.exists()
+
+        # Create minimal result data for testing
+        from skellysolver.core import OptimizationResult
+
+        result = OptimizationResult(
+            success=True,
+            num_iterations=10,
+            initial_cost=1.0,
+            final_cost=0.1,
+            solve_time_seconds=0.5,
+            reconstructed=None,
+            rotations=None,
+            translations=None,
+        )
+
+        metrics = {"mean_error": 0.5}
+
+        # Save results - this should create the directory
+        writer.save_generic_results(
+            result=result,
+            metrics=metrics
+        )
+
+        # Now the directory should exist
         assert output_dir.exists()
+        assert (output_dir / "metrics.json").exists()

@@ -19,21 +19,9 @@ class RigidBodyViewerGenerator(BaseViewerGenerator):
     - Playback controls
     - Metric displays
     """
-    
-    def __init__(self, *, template_path: Path | None = None) -> None:
-        """Initialize rigid body viewer generator.
-        
-        Args:
-            template_path: Optional custom template path
-        """
-        super().__init__()
-        
-        if template_path is None:
-            # Use default template (next to this file)
-            template_path = Path(__file__).parent / "templates" / "rigid_body_viewer.html"
-        
-        self.template_path = template_path
-    
+
+    template_path: Path | None = Path(__file__).parent / "templates" / "rigid_body_viewer.html"
+
     def _get_template_path(self) -> Path:
         """Get template path.
         

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .base_viewer import BaseViewerGenerator
+from skellysolver.io.viewers.rigid_viewer import RigidBodyViewerGenerator
 
 
 class EyeTrackingViewerGenerator(BaseViewerGenerator):
@@ -19,21 +20,8 @@ class EyeTrackingViewerGenerator(BaseViewerGenerator):
     - Pupil dilation graph
     - Reprojection error metrics
     """
-    
-    def __init__(self, *, template_path: Path | None = None) -> None:
-        """Initialize eye tracking viewer generator.
-        
-        Args:
-            template_path: Optional custom template path
-        """
-        super().__init__()
-        
-        if template_path is None:
-            # Use default template
-            template_path = Path(__file__).parent / "templates" / "eye_tracking_viewer.html"
-        
-        self.template_path = template_path
-    
+    template_path: Path | None = Path(__file__).parent / "templates" / "eye_tracking_viewer.html"
+
     def _get_template_path(self) -> Path:
         """Get template path.
         
@@ -233,8 +221,7 @@ def generate_rigid_body_viewer(
     Returns:
         Path to generated HTML
     """
-    from .rigid_body_viewer import RigidBodyViewerGenerator
-    
+
     generator = RigidBodyViewerGenerator(template_path=template_path)
     
     return generator.generate(
@@ -263,8 +250,7 @@ def generate_eye_tracking_viewer(
     Returns:
         Path to generated HTML
     """
-    from .eye_tracking_viewer import EyeTrackingViewerGenerator
-    
+
     generator = EyeTrackingViewerGenerator(template_path=template_path)
     
     return generator.generate(

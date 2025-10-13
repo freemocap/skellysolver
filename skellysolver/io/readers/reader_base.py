@@ -3,11 +3,13 @@
 Provides consistent interface for reading different file formats.
 All readers inherit from BaseReader and implement read() method.
 """
-
-import numpy as np
+import csv
+import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
 
@@ -28,10 +30,10 @@ class BaseReader(ArbitraryTypesModel,ABC):
         data = reader.read(filepath=Path("data.txt"))
     """
     
-    def __init__(self) -> None:
-        """Initialize reader."""
-        self.last_read_path: Path | None = None
-        self.last_read_data: dict[str, Any] | None = None
+
+
+    last_read_path: Path | None = None
+    last_read_data: dict[str, Any] | None = None
     
     @abstractmethod
     def read(self, *, filepath: Path) -> dict[str, Any]:
@@ -81,72 +83,6 @@ class BaseReader(ArbitraryTypesModel,ABC):
             raise ValueError(f"File is empty: {filepath}")
 
 
-class CSVReader(BaseReader):
-    """Base class for CSV readers.
-    
-    Provides common CSV reading functionality.
-    Subclasses implement format-specific parsing.
-    """
-    
-    def __init__(self, *, encoding: str = 'utf-8') -> None:
-        """Initialize CSV reader.
-        
-        Args:
-            encoding: Text encoding for CSV file
-        """
-        super().__init__()
-        self.encoding = encoding
-    
-    def can_read(self, *, filepath: Path) -> bool:
-        """Check if file is CSV.
-        
-        Args:
-            filepath: Path to file
-            
-        Returns:
-            True if file has .csv extension
-        """
-        return filepath.suffix.lower() == '.csv' and filepath.exists()
-    
-    def read_lines(self, *, filepath: Path, max_lines: int | None = None) -> list[str]:
-        """Read lines from CSV file.
-        
-        Args:
-            filepath: Path to CSV file
-            max_lines: Maximum number of lines to read (None = all)
-            
-        Returns:
-            List of lines (without newline characters)
-        """
-        self.validate_file(filepath=filepath)
-        
-        with open(filepath, mode='r', encoding=self.encoding) as f:
-            if max_lines is None:
-                lines = f.readlines()
-            else:
-                lines = [f.readline() for _ in range(max_lines)]
-        
-        return [line.strip() for line in lines]
-    
-    def read_header(self, *, filepath: Path) -> list[str]:
-        """Read CSV header row.
-        
-        Args:
-            filepath: Path to CSV file
-            
-        Returns:
-            List of column names
-        """
-        import csv
-        
-        self.validate_file(filepath=filepath)
-        
-        with open(filepath, mode='r', encoding=self.encoding) as f:
-            reader = csv.reader(f)
-            header = next(reader)
-        
-        return [col.strip() for col in header]
-
 
 class BinaryReader(BaseReader):
     """Base class for binary file readers.
@@ -194,8 +130,7 @@ class JSONReader(BaseReader):
         Returns:
             Parsed JSON data
         """
-        import json
-        
+
         self.validate_file(filepath=filepath)
         
         with open(filepath, mode='r', encoding='utf-8') as f:

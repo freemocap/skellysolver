@@ -13,9 +13,13 @@ import pyceres
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import model_validator, Field
+from typing_extensions import Self
 
-@dataclass
-class OptimizationResult:
+from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
+
+
+class OptimizationResult(ArbitraryTypesModel):
     """Results from pyceres optimization.
     
     Core results that are always present:
@@ -53,15 +57,17 @@ class OptimizationResult:
     pupil_scales: np.ndarray | None = None
     
     # Additional data
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate(self) -> Self:
         """Validate and log result."""
         if not self.success:
             print(f"⚠ Warning: Optimization did not converge")
             print(f"  Iterations: {self.num_iterations}")
             print(f"  Final cost: {self.final_cost:.6f}")
-    
+        return self
+
     @property
     def cost_reduction(self) -> float:
         """Compute relative cost reduction.
@@ -164,7 +170,7 @@ class OptimizationResult:
         )
 
 
-@dataclass
+
 class RigidBodyResult(OptimizationResult):
     """Specialized result for rigid body tracking.
     
@@ -178,7 +184,8 @@ class RigidBodyResult(OptimizationResult):
     translations: np.ndarray = None
     reference_geometry: np.ndarray = None
     
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate(self) -> Self:
         """Validate rigid body result."""
         super().__post_init__()
         
@@ -191,6 +198,7 @@ class RigidBodyResult(OptimizationResult):
             raise ValueError("RigidBodyResult requires translations")
         if self.reference_geometry is None:
             raise ValueError("RigidBodyResult requires reference_geometry")
+        return self
     
     @property
     def n_frames(self) -> int:
@@ -256,8 +264,8 @@ class EyeTrackingResult(OptimizationResult):
         return float(np.mean(self.tear_duct_errors))
 
 
-@dataclass
-class ChunkedResult:
+
+class ChunkedResult(ArbitraryTypesModel):
     """Result from chunked parallel optimization.
     
     Contains results from individual chunks plus stitched result.

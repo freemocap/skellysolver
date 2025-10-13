@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
-
+from pydantic import Field
 
 class BaseWriter(ArbitraryTypesModel,ABC):
     """Abstract base class for all data writers.
@@ -33,9 +33,7 @@ class BaseWriter(ArbitraryTypesModel,ABC):
         writer.write(filepath=Path("output.txt"), data={"key": "value"})
     """
     
-    def __init__(self) -> None:
-        """Initialize writer."""
-        self.last_write_path: Path | None = None
+    last_write_path: Path | None = None
     
     @abstractmethod
     def write(
@@ -84,16 +82,8 @@ class CSVWriter(BaseWriter):
     Provides common CSV writing functionality.
     Subclasses implement format-specific structure.
     """
-    
-    def __init__(self, *, encoding: str = 'utf-8') -> None:
-        """Initialize CSV writer.
-        
-        Args:
-            encoding: Text encoding for CSV file
-        """
-        super().__init__()
-        self.encoding = encoding
-    
+    encoding: str = 'utf-8'
+
     def write_rows(
         self,
         *,
@@ -128,16 +118,8 @@ class CSVWriter(BaseWriter):
 
 class JSONWriter(BaseWriter):
     """Writer for JSON files."""
-    
-    def __init__(self, *, indent: int = 2) -> None:
-        """Initialize JSON writer.
-        
-        Args:
-            indent: Indentation level for pretty printing
-        """
-        super().__init__()
-        self.indent = indent
-    
+    indent: int = 2
+
     def write(
         self,
         *,
@@ -231,17 +213,17 @@ class NPYWriter(BaseWriter):
         self.write(filepath=filepath, data={"array": array})
 
 
-class MultiFormatWriter:
+class MultiFormatWriter(BaseWriter):
     """Writer that automatically selects format based on file extension.
     
     Supports: .csv, .json, .npy
     """
     
-    def __init__(self) -> None:
-        """Initialize multi-format writer."""
-        self.csv_writer = CSVWriter()
-        self.json_writer = JSONWriter()
-        self.npy_writer = NPYWriter()
+
+
+    csv_writer :CSVWriter = Field(default_factory=CSVWriter)
+    json_writer:JSONWriter = Field(default_factory=JSONWriter)
+    npy_writer :NPYWriter = Field(default_factory=NPYWriter)
     
     def write(
         self,
