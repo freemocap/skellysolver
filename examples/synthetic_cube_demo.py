@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation
 
 from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig
 from skellysolver.pipelines import RigidBodyConfig, RigidBodyPipeline
-from skellysolver.pipelines.topology import RigidBodyTopology
+from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
 
 logger = logging.getLogger(__name__)
 

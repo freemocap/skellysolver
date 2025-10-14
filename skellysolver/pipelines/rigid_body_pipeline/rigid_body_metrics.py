@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def evaluate_reconstruction(
+def evaluate_rigid_body_reconstruction(
     *,
     raw_data: np.ndarray,
     optimized_data: np.ndarray,

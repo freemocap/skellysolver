@@ -17,7 +17,7 @@ import logging
 
 from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig, ParallelConfig
 from skellysolver.pipelines.rigid_body_pipeline import RigidBodyConfig, RigidBodyPipeline
-from skellysolver.pipelines.topology import RigidBodyTopology
+from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s | %(message)s')
 logger = logging.getLogger(__name__)

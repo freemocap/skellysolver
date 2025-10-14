@@ -6,7 +6,7 @@ Cost functions for fitting eye model to 2D pupil observations.
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from skellysolver.core.cost_functions.base_cost import BaseCostFunction
+from skellysolver.core.cost_primatives.base_cost import BaseCostFunction
 
 
 class PupilPointProjectionCost(BaseCostFunction):

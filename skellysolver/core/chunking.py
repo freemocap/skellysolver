@@ -143,10 +143,10 @@ def create_blend_weights(
         (n_frames,) weights transitioning from 0 to 1
     """
     if blend_type == "linear":
-        return np.linspace(0.0, 1.0, n_frames)
+        return np.linspace(start=0.0, stop=1.0, num=n_frames)
     elif blend_type == "cosine":
         # Cosine interpolation for smoother blending
-        t = np.linspace(0.0, 1.0, n_frames)
+        t = np.linspace(start=0.0, stop=1.0, num=n_frames)
         return (1.0 - np.cos(t * np.pi)) / 2.0
     else:
         raise ValueError(f"Unknown blend_type: {blend_type}")
@@ -232,6 +232,9 @@ def optimize_chunk_sequential(
 
     Returns:
         ChunkResult with optimization results
+
+    Raises:
+        Exception: Any error during optimization propagates immediately with full traceback
     """
     start_time = time.time()
 
@@ -240,38 +243,20 @@ def optimize_chunk_sequential(
 
     logger.info(f"  Optimizing chunk {chunk_info.chunk_id}: frames {chunk_info.global_start}-{chunk_info.global_end}")
 
-    try:
-        # Call the optimization function
-        result = optimize_fn(data=chunk_data, **optimize_kwargs)
+    # NO try-except - let errors crash immediately with full traceback!
+    result = optimize_fn(data=chunk_data, **optimize_kwargs)
 
-        computation_time = time.time() - start_time
+    computation_time = time.time() - start_time
 
-        return ChunkResult(
-            chunk_info=chunk_info,
-            rotations=result.rotations,
-            translations=result.translations,
-            reconstructed=result.reconstructed,
-            reference_geometry=result.reference_geometry,
-            computation_time=computation_time,
-            success=result.success
-        )
-
-    except Exception as e:
-        logger.error(f"  Chunk {chunk_info.chunk_id} failed: {e}")
-
-        # Return dummy result on failure
-        n_frames = chunk_info.n_frames
-        n_markers = chunk_data.shape[1]
-
-        return ChunkResult(
-            chunk_info=chunk_info,
-            rotations=np.tile(np.eye(3), (n_frames, 1, 1)),
-            translations=np.zeros((n_frames, 3)),
-            reconstructed=chunk_data.copy(),
-            reference_geometry=np.zeros((n_markers, 3)),
-            computation_time=time.time() - start_time,
-            success=False
-        )
+    return ChunkResult(
+        chunk_info=chunk_info,
+        rotations=result.rotations,
+        translations=result.translations,
+        reconstructed=result.reconstructed,
+        reference_geometry=result.reference_geometry,
+        computation_time=computation_time,
+        success=result.success
+    )
 
 
 def optimize_chunk_parallel_worker(
@@ -294,38 +279,29 @@ def optimize_chunk_parallel_worker(
 
     Returns:
         ChunkResult
+
+    Raises:
+        Exception: Any error during optimization propagates immediately.
+                  Multiprocessing will capture and re-raise in main process.
     """
     # Suppress verbose logging in worker processes
     logging.getLogger('skellysolver').setLevel(logging.WARNING)
 
     start_time = time.time()
 
-    try:
-        result = optimize_fn(data=chunk_data, **optimize_kwargs)
+    # NO try-except - let errors crash immediately with full traceback!
+    # Multiprocessing will capture the exception and re-raise it in the main process
+    result = optimize_fn(data=chunk_data, **optimize_kwargs)
 
-        return ChunkResult(
-            chunk_info=chunk_info,
-            rotations=result.rotations,
-            translations=result.translations,
-            reconstructed=result.reconstructed,
-            reference_geometry=result.reference_geometry,
-            computation_time=time.time() - start_time,
-            success=result.success
-        )
-
-    except Exception as e:
-        n_frames = chunk_data.shape[0]
-        n_markers = chunk_data.shape[1]
-
-        return ChunkResult(
-            chunk_info=chunk_info,
-            rotations=np.tile(np.eye(3), (n_frames, 1, 1)),
-            translations=np.zeros((n_frames, 3)),
-            reconstructed=chunk_data.copy(),
-            reference_geometry=np.zeros((n_markers, 3)),
-            computation_time=time.time() - start_time,
-            success=False
-        )
+    return ChunkResult(
+        chunk_info=chunk_info,
+        rotations=result.rotations,
+        translations=result.translations,
+        reconstructed=result.reconstructed,
+        reference_geometry=result.reference_geometry,
+        computation_time=time.time() - start_time,
+        success=result.success
+    )
 
 
 def optimize_chunked_parallel(
@@ -353,6 +329,9 @@ def optimize_chunked_parallel(
 
     Returns:
         Tuple of (rotations, translations, reconstructed)
+
+    Raises:
+        RuntimeError: If any chunk fails to optimize (with detailed context)
     """
     n_frames, n_markers, _ = raw_data.shape
 
@@ -399,22 +378,47 @@ def optimize_chunked_parallel(
 
     start_time = time.time()
 
-    with mp.Pool(processes=n_workers) as pool:
-        chunk_results_unsorted = pool.starmap(
-            optimize_chunk_parallel_worker,
-            tasks
+    # Catch multiprocessing errors and provide context
+    try:
+        with mp.Pool(processes=n_workers) as pool:
+            chunk_results_unsorted = pool.starmap(
+                optimize_chunk_parallel_worker,
+                tasks
+            )
+    except Exception as e:
+        # If ANY chunk fails, multiprocessing will raise an exception
+        # Re-raise with more context to help debugging
+        error_msg = (
+            f"❌ PARALLEL OPTIMIZATION CRASHED!\n"
+            f"  Error type: {type(e).__name__}\n"
+            f"  Error message: {e}\n"
+            f"\n"
+            f"One or more chunks failed during parallel processing.\n"
+            f"Check the full traceback above for the exact failure point.\n"
+            f"\n"
+            f"Common causes:\n"
+            f"  1. Bad/missing input data in a specific time range\n"
+            f"  2. Numerical instability in the optimizer\n"
+            f"  3. Invalid configuration parameters (weights, tolerances)\n"
+            f"  4. Out of memory (try reducing chunk_size or n_workers)\n"
+            f"  5. Bug in optimization function\n"
+            f"\n"
+            f"Debug steps:\n"
+            f"  1. Check the full error traceback above\n"
+            f"  2. Try sequential mode (ParallelConfig(enabled=False))\n"
+            f"  3. Reduce chunk_size to isolate problematic time range\n"
+            f"  4. Inspect input data for NaN/Inf values"
         )
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
 
     total_time = time.time() - start_time
 
     # Sort by chunk_id
     chunk_results = sorted(chunk_results_unsorted, key=lambda x: x.chunk_info.chunk_id)
 
-    # Check for failures
-    failed = [r.chunk_info.chunk_id for r in chunk_results if not r.success]
-    if failed:
-        logger.error(f"Failed chunks: {failed}")
-        raise RuntimeError(f"Optimization failed for chunks: {failed}")
+    # NO check for success=False - errors crash immediately now!
+    # If we reached here, all chunks succeeded (or would have crashed)
 
     logger.info(f"\n{'=' * 80}")
     logger.info("PARALLEL OPTIMIZATION COMPLETE")
@@ -455,6 +459,9 @@ def optimize_chunked_sequential(
 
     Returns:
         Tuple of (rotations, translations, reconstructed)
+
+    Raises:
+        Exception: Any optimization error propagates immediately with full traceback
     """
     n_frames, n_markers, _ = raw_data.shape
 
@@ -493,9 +500,9 @@ def optimize_chunked_sequential(
             **optimize_kwargs
         )
         chunk_results.append(result)
-        logger.info(f"Chunk {chunk.chunk_id} complete({result.computation_time: .1f}s)")
+        logger.info(f"Chunk {chunk.chunk_id} complete ({result.computation_time:.1f}s)")
 
-        # Stitch results
+    # Stitch results
     return stitch_chunk_results(
         chunk_results=chunk_results,
         n_frames=n_frames,

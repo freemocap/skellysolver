@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .base_data import Trajectory3D, Observation2D, TrajectoryDataset
-from .formats import detect_csv_format, CSVFormat
+from skellysolver.io.formats import detect_csv_format, CSVFormat
 
 
 def load_trajectories(

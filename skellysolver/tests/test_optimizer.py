@@ -9,7 +9,7 @@ import pytest
 from skellysolver.core.config import OptimizationConfig, ParallelConfig, WeightConfig
 from skellysolver.core.result import OptimizationResult
 from skellysolver.core.optimizer import Optimizer
-from skellysolver.core.cost_functions import (
+from skellysolver.core.cost_primatives import (
     RotationSmoothnessCost,
     TranslationSmoothnessCost,
 )

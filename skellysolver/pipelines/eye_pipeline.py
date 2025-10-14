@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field, model_validator
 
 from skellysolver.core.config import OptimizationConfig, EyeTrackingWeightConfig, ParallelConfig
-from skellysolver.core.cost_functions import RotationSmoothnessCost, ScalarSmoothnessCost
-from skellysolver.core.cost_functions.eye_costs import PupilPointProjectionCost, TearDuctProjectionCost
+from skellysolver.core.cost_primatives import RotationSmoothnessCost, ScalarSmoothnessCost
+from skellysolver.core.cost_primatives.eye_costs import PupilPointProjectionCost, TearDuctProjectionCost
 from skellysolver.core.result import EyeTrackingResult
 from skellysolver.core.optimizer import Optimizer
 from skellysolver.core.chunking import optimize_chunked_parallel, optimize_chunked_sequential
@@ -537,7 +537,7 @@ class EyeTrackingPipeline(BasePipeline):
                 quaternions[i, 0]
             ])
             R = Rotation.from_quat(quat=quat_scipy)
-            gaze_directions[i] = R.apply(v=np.array([0, 0, 1]))
+            gaze_directions[i] = R.apply(np.array([0, 0, 1]))
 
             # Pupil center 3D (on eyeball surface)
             pupil_centers_3d[i] = eyeball_center

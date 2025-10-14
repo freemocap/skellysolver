@@ -4,13 +4,12 @@ Tests RigidBodyPipeline end-to-end.
 """
 
 import numpy as np
-import pytest
 from pathlib import Path
 
 from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig
 from skellysolver.core.result import RigidBodyResult
 from skellysolver.pipelines import RigidBodyConfig, RigidBodyPipeline
-from skellysolver.pipelines.topology import RigidBodyTopology
+from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
 
 
 class TestRigidBodyPipeline:

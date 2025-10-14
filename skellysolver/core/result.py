@@ -10,7 +10,6 @@ Replaces:
 
 import numpy as np
 import pyceres
-from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import model_validator, Field
@@ -61,36 +60,64 @@ class OptimizationResult(ArbitraryTypesModel):
     
     @model_validator(mode="after")
     def validate(self) -> Self:
-        """Validate and log result."""
+        """Validate and check result - CRASHES if optimization failed.
+
+        Raises:
+            RuntimeError: If optimization did not converge, with detailed debugging info
+        """
         if not self.success:
-            print(f"⚠ Warning: Optimization did not converge")
-            print(f"  Iterations: {self.num_iterations}")
-            print(f"  Final cost: {self.final_cost:.6f}")
+            error_msg = (
+                f"❌ OPTIMIZATION FAILED TO CONVERGE!\n"
+                f"\n"
+                f"Optimization Details:\n"
+                f"  Iterations completed: {self.num_iterations}\n"
+                f"  Initial cost:         {self.initial_cost:.6f}\n"
+                f"  Final cost:           {self.final_cost:.6f}\n"
+                f"  Cost reduction:       {self.cost_reduction_percent:.1f}%\n"
+                f"  Solve time:           {self.solve_time_seconds:.2f}s\n"
+                f"\n"
+                f"This indicates the optimizer could not find a good solution.\n"
+                f"\n"
+                f"Common Causes:\n"
+                f"  1. Bad input data (missing markers, excessive noise)\n"
+                f"  2. Weights too strong (rigid constraints preventing convergence)\n"
+                f"  3. max_iterations too low (increase to 500-1000)\n"
+                f"  4. Poor initial conditions (bad reference geometry)\n"
+                f"  5. Numerical instability (check for NaN/Inf in data)\n"
+                f"\n"
+                f"Debug Steps:\n"
+                f"  1. Check input data quality (plot marker trajectories)\n"
+                f"  2. Reduce constraint weights (lambda_rigid, lambda_smooth)\n"
+                f"  3. Increase max_iterations in OptimizationConfig\n"
+                f"  4. Try with smaller data subset to isolate problem\n"
+                f"  5. Check cost reduction - if very small, may need better initialization"
+            )
+            raise RuntimeError(error_msg)
         return self
 
     @property
     def cost_reduction(self) -> float:
         """Compute relative cost reduction.
-        
+
         Returns:
             Fraction of cost reduced (0-1)
         """
         if self.initial_cost == 0.0:
             return 0.0
         return (self.initial_cost - self.final_cost) / self.initial_cost
-    
+
     @property
     def cost_reduction_percent(self) -> float:
         """Compute cost reduction percentage.
-        
+
         Returns:
             Percentage of cost reduced (0-100)
         """
         return self.cost_reduction * 100.0
-    
+
     def summary(self) -> str:
         """Generate human-readable summary.
-        
+
         Returns:
             Multi-line summary string
         """
@@ -106,40 +133,40 @@ class OptimizationResult(ArbitraryTypesModel):
             f"Reduction:    {self.cost_reduction_percent:.1f}%",
             "="*80,
         ]
-        
+
         # Add optional result info
         if self.reconstructed is not None:
             n_frames = self.reconstructed.shape[0]
             n_markers = self.reconstructed.shape[1]
             lines.append(f"Reconstructed: {n_frames} frames × {n_markers} markers")
-        
+
         if self.rotations is not None:
             n_frames = self.rotations.shape[0]
             lines.append(f"Rotations:     {n_frames} frames")
-        
+
         if self.translations is not None:
             n_frames = self.translations.shape[0]
             lines.append(f"Translations:  {n_frames} frames")
-        
+
         if self.reference_geometry is not None:
             n_markers = self.reference_geometry.shape[0]
             lines.append(f"Reference:     {n_markers} markers")
-        
+
         if self.gaze_directions is not None:
             n_frames = self.gaze_directions.shape[0]
             lines.append(f"Gaze:          {n_frames} frames")
-        
+
         if self.pupil_scales is not None:
             n_frames = len(self.pupil_scales)
             mean_scale = np.mean(self.pupil_scales)
             std_scale = np.std(self.pupil_scales)
             lines.append(f"Pupil scale:   {mean_scale:.3f} ± {std_scale:.3f}")
-        
+
         if self.metadata:
             lines.append(f"Metadata:      {len(self.metadata)} entries")
-        
+
         return "\n".join(lines)
-    
+
     @classmethod
     def from_pyceres_summary(
         cls,
@@ -148,11 +175,11 @@ class OptimizationResult(ArbitraryTypesModel):
         solve_time_seconds: float
     ) -> "OptimizationResult":
         """Create result from pyceres SolverSummary.
-        
+
         Args:
             summary: pyceres solver summary
             solve_time_seconds: Measured solve time
-            
+
         Returns:
             OptimizationResult with core fields filled
         """
@@ -160,7 +187,7 @@ class OptimizationResult(ArbitraryTypesModel):
             summary.termination_type == pyceres.TerminationType.CONVERGENCE or
             summary.termination_type == pyceres.TerminationType.USER_SUCCESS
         )
-        
+
         return cls(
             success=success,
             num_iterations=summary.num_successful_steps + summary.num_unsuccessful_steps,
@@ -170,60 +197,84 @@ class OptimizationResult(ArbitraryTypesModel):
         )
 
 
-
 class RigidBodyResult(OptimizationResult):
     """Specialized result for rigid body tracking.
-    
+
     Extends OptimizationResult with rigid body specific fields.
     All fields from OptimizationResult are inherited.
     """
-    
+
     # Override to make required
     reconstructed: np.ndarray = None
     rotations: np.ndarray = None
     translations: np.ndarray = None
     reference_geometry: np.ndarray = None
-    
+
     @model_validator(mode="after")
     def validate(self) -> Self:
-        """Validate rigid body result."""
+        """Validate rigid body result - CRASHES if required fields missing.
 
-        
-        # Check required fields
+        Raises:
+            ValueError: If any required field is missing, with detailed explanation
+        """
+        # Build detailed error message
+        missing_fields = []
         if self.reconstructed is None:
-            raise ValueError("RigidBodyResult requires reconstructed positions")
+            missing_fields.append("reconstructed: (n_frames, n_markers, 3) 3D marker positions")
         if self.rotations is None:
-            raise ValueError("RigidBodyResult requires rotations")
+            missing_fields.append("rotations: (n_frames, 3, 3) rotation matrices for each frame")
         if self.translations is None:
-            raise ValueError("RigidBodyResult requires translations")
+            missing_fields.append("translations: (n_frames, 3) translation vectors for each frame")
         if self.reference_geometry is None:
-            raise ValueError("RigidBodyResult requires reference_geometry")
+            missing_fields.append("reference_geometry: (n_markers, 3) rigid body reference shape")
+
+        if missing_fields:
+            error_msg = (
+                f"❌ INVALID RigidBodyResult - Missing Required Fields!\n"
+                f"\n"
+                f"The following required fields are None:\n" +
+                "\n".join(f"  • {field}" for field in missing_fields) +
+                f"\n\n"
+                f"This is a BUG in the optimization code!\n"
+                f"RigidBodyResult objects MUST have all these fields populated.\n"
+                f"\n"
+                f"Likely causes:\n"
+                f"  1. Optimization function did not return all required outputs\n"
+                f"  2. Result assembly code has a bug\n"
+                f"  3. Data conversion/extraction failed silently\n"
+                f"\n"
+                f"Debug steps:\n"
+                f"  1. Check the optimization function return value\n"
+                f"  2. Verify result assembly in the pipeline code\n"
+                f"  3. Add logging before result creation to see what's None"
+            )
+            raise ValueError(error_msg)
+
         return self
-    
+
     @property
     def n_frames(self) -> int:
         """Number of frames."""
         return self.reconstructed.shape[0]
-    
+
     @property
     def n_markers(self) -> int:
         """Number of markers."""
         return self.reconstructed.shape[1]
 
 
-@dataclass
 class EyeTrackingResult(OptimizationResult):
     """Specialized result for eye tracking.
-    
+
     Extends OptimizationResult with eye tracking specific fields.
     All fields from OptimizationResult are inherited.
     """
-    
+
     # Override to make required
     rotations: np.ndarray = None
     gaze_directions: np.ndarray = None
     pupil_scales: np.ndarray = None
-    
+
     # Eye tracking specific
     pupil_centers_3d: np.ndarray | None = None
     tear_ducts_3d: np.ndarray | None = None
@@ -234,29 +285,57 @@ class EyeTrackingResult(OptimizationResult):
 
     @model_validator(mode="after")
     def validate(self) -> Self:
+        """Validate eye tracking result - CRASHES if required fields missing.
 
-
-        # Check required fields
+        Raises:
+            ValueError: If any required field is missing, with detailed explanation
+        """
+        # Build detailed error message
+        missing_fields = []
         if self.rotations is None:
-            raise ValueError("EyeTrackingResult requires rotations (eye orientations)")
+            missing_fields.append("rotations: (n_frames, 3, 3) or (n_frames, 4) - eye orientations as matrices or quaternions")
         if self.gaze_directions is None:
-            raise ValueError("EyeTrackingResult requires gaze_directions")
+            missing_fields.append("gaze_directions: (n_frames, 3) - 3D gaze direction vectors")
         if self.pupil_scales is None:
-            raise ValueError("EyeTrackingResult requires pupil_scales")
+            missing_fields.append("pupil_scales: (n_frames,) - pupil dilation scale factors")
+
+        if missing_fields:
+            error_msg = (
+                f"❌ INVALID EyeTrackingResult - Missing Required Fields!\n"
+                f"\n"
+                f"The following required fields are None:\n" +
+                "\n".join(f"  • {field}" for field in missing_fields) +
+                f"\n\n"
+                f"This is a BUG in the eye tracking optimization code!\n"
+                f"EyeTrackingResult objects MUST have all these fields populated.\n"
+                f"\n"
+                f"Likely causes:\n"
+                f"  1. Eye tracking optimizer did not return all required outputs\n"
+                f"  2. Result extraction from optimization variables failed\n"
+                f"  3. Data conversion from pyceres parameters failed silently\n"
+                f"\n"
+                f"Debug steps:\n"
+                f"  1. Check the eye tracking optimization function return value\n"
+                f"  2. Verify parameter extraction after optimization\n"
+                f"  3. Add logging to see which fields are None and why\n"
+                f"  4. Check if optimization actually ran (success flag)"
+            )
+            raise ValueError(error_msg)
+
         return self
-    
+
     @property
     def n_frames(self) -> int:
         """Number of frames."""
         return len(self.gaze_directions)
-    
+
     @property
     def mean_pupil_error(self) -> float:
         """Mean pupil reprojection error in pixels."""
         if self.pupil_errors is None:
             return 0.0
         return float(np.mean(self.pupil_errors))
-    
+
     @property
     def mean_tear_duct_error(self) -> float:
         """Mean tear duct reprojection error in pixels."""
@@ -265,37 +344,36 @@ class EyeTrackingResult(OptimizationResult):
         return float(np.mean(self.tear_duct_errors))
 
 
-
 class ChunkedResult(ArbitraryTypesModel):
     """Result from chunked parallel optimization.
-    
+
     Contains results from individual chunks plus stitched result.
     """
-    
+
     # Individual chunk results
     chunk_results: list[OptimizationResult]
-    
+
     # Stitched result
     stitched_result: OptimizationResult
-    
+
     # Timing info
     total_time_seconds: float
     chunk_times_seconds: list[float]
-    
+
     @property
     def n_chunks(self) -> int:
         """Number of chunks."""
         return len(self.chunk_results)
-    
+
     @property
     def average_chunk_time(self) -> float:
         """Average time per chunk in seconds."""
         return float(np.mean(self.chunk_times_seconds))
-    
+
     @property
     def speedup(self) -> float:
         """Speedup from parallelization.
-        
+
         Returns:
             Speedup factor (>1 = faster with parallel)
         """
@@ -303,10 +381,10 @@ class ChunkedResult(ArbitraryTypesModel):
         if self.total_time_seconds == 0.0:
             return 1.0
         return sequential_time / self.total_time_seconds
-    
+
     def summary(self) -> str:
         """Generate summary of chunked optimization.
-        
+
         Returns:
             Multi-line summary string
         """
@@ -320,9 +398,9 @@ class ChunkedResult(ArbitraryTypesModel):
             f"Speedup:         {self.speedup:.1f}x",
             "="*80,
         ]
-        
+
         # Add stitched result summary
         lines.append("\nStitched Result:")
         lines.append(self.stitched_result.summary())
-        
+
         return "\n".join(lines)

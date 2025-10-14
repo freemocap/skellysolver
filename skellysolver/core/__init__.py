@@ -44,7 +44,7 @@ from .optimizer import (
 )
 
 # Cost functions (import everything from cost_functions module)
-from .cost_functions import (
+from .cost_primatives import (
     BaseCostFunction,
     RotationSmoothnessCost,
     TranslationSmoothnessCost,

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from skellysolver.core.cost_functions import (
+from skellysolver.core.cost_primatives import (
     RotationSmoothnessCost,
     TranslationSmoothnessCost,
     ScalarSmoothnessCost,
@@ -296,7 +296,7 @@ class TestCostFunctionIntegration:
     
     def test_all_costs_importable(self) -> None:
         """All cost functions should be importable."""
-        from skellysolver.core.cost_functions import (
+        from skellysolver.core.cost_primatives import (
             BaseCostFunction,
             RotationSmoothnessCost,
             TranslationSmoothnessCost,

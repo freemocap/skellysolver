@@ -64,7 +64,7 @@ from .base_data import (
 )
 
 # Format detection
-from .formats import (
+from skellysolver.io.formats import (
     CSVFormat,
     detect_csv_format,
     validate_tidy_format,

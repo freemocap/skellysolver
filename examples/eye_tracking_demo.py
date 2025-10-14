@@ -53,13 +53,6 @@ def run_eye_tracking(*, input_csv: Path, output_dir: Path) -> None:
         eyeball_distance_mm=20.0,
         base_semi_major_mm=2.0,
         base_semi_minor_mm=1.5,
-        # Parallel processing - auto-decides based on data size
-        parallel=ParallelConfig(
-            enabled=True,  # Enable parallel processing
-            chunk_size=1000,  # Frames per chunk
-            overlap_size=100,  # Overlap between chunks
-            blend_window=50,  # Smooth blending window
-        )
     )
 
     # Run pipeline - handles everything automatically
@@ -154,7 +147,7 @@ def run_eye_tracking_single_pass(*, input_csv: Path, output_dir: Path) -> None:
         output_dir=output_dir,
         camera=CameraIntrinsics.create_pupil_labs_camera(),
         optimization=OptimizationConfig(
-            max_iterations=500,
+            max_iterations=30,
             use_robust_loss=True,
             robust_loss_type="huber",
             robust_loss_param=2.0,
@@ -173,7 +166,6 @@ def run_eye_tracking_single_pass(*, input_csv: Path, output_dir: Path) -> None:
         # No chunking - will force single-pass even for long recordings
         parallel=ParallelConfig(
             enabled=False,
-            min_chunk_threshold=1_000_000  # Very high threshold
         )
     )
 

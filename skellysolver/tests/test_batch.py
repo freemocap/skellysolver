@@ -3,8 +3,6 @@
 Tests batch configuration, processor, and utilities.
 """
 
-import numpy as np
-import pytest
 from pathlib import Path
 
 from skellysolver.batch.batch_config import BatchConfig, BatchJobConfig, ParameterSweepConfig
@@ -12,7 +10,7 @@ from skellysolver.batch.batch_processor import BatchJobResult, BatchResult
 from skellysolver.batch.batch_utils import create_parameter_sweep, estimate_batch_time, create_batch_from_files
 from skellysolver.core import OptimizationConfig
 from skellysolver.pipelines import RigidBodyConfig
-from skellysolver.pipelines.topology import RigidBodyTopology
+from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
 
 
 class TestBatchConfig:

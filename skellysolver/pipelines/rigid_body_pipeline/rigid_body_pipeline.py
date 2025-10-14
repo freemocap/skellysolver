@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation
 
 from skellysolver.core.chunking import optimize_chunked_parallel, optimize_chunked_sequential
 from skellysolver.core.config import RigidBodyWeightConfig, ParallelConfig
-from skellysolver.core.cost_functions import RigidPoint3DMeasurementBundleAdjustment, RigidEdgeCost, SoftEdgeCost, \
+from skellysolver.core.cost_primatives import RigidPoint3DMeasurementBundleAdjustment, RigidEdgeCost, SoftEdgeCost, \
     RotationSmoothnessCost, TranslationSmoothnessCost
 from skellysolver.core.optimizer import Optimizer
 from skellysolver.core.result import RigidBodyResult
@@ -27,10 +27,10 @@ from skellysolver.data.validators import (
     validate_topology_compatibility,
 )
 from skellysolver.pipelines import PipelineConfig, BasePipeline
-from skellysolver.pipelines.metrics import evaluate_reconstruction
+from skellysolver.pipelines.rigid_body_pipeline.rigid_body_metrics import evaluate_rigid_body_reconstruction
 from skellysolver.io.writers.csv_writer import TidyCSVWriter
-from skellysolver.pipelines.savers import save_topology_json, save_evaluation_report
-from skellysolver.pipelines.topology import RigidBodyTopology
+from skellysolver.pipelines.rigid_body_pipeline.savers import save_topology_json, save_evaluation_report
+from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
 
 logger = logging.getLogger(__name__)
 
@@ -646,7 +646,7 @@ class RigidBodyPipeline(BasePipeline):
         )
 
         # Evaluate reconstruction
-        metrics = evaluate_reconstruction(
+        metrics = evaluate_rigid_body_reconstruction(
             raw_data=raw_data,
             optimized_data=optimized_data,
             reference_distances=reference_distances,
