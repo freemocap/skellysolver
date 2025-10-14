@@ -38,9 +38,9 @@ class OptimizationConfig:
     
     # Convergence criteria
     max_iterations: int = 300
-    function_tolerance: float = 1e-9
-    gradient_tolerance: float = 1e-11
-    parameter_tolerance: float = 1e-10
+    function_tolerance: float = 1e-6
+    gradient_tolerance: float = 1e-8
+    parameter_tolerance: float = 1e-7
     
     # Robust loss function
     use_robust_loss: bool = True

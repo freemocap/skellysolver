@@ -212,7 +212,7 @@ def run_synthetic_demo() -> None:
     reference_markers = generate_cube_markers(size=1.0, n_extra=3)
     ground_truth, noisy = generate_synthetic_trajectory(
         reference_markers=reference_markers,
-        n_frames=200,
+        n_frames=2000,
         noise_std=0.1,
         random_seed=42
     )

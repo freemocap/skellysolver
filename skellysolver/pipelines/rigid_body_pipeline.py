@@ -1,26 +1,26 @@
-"""Rigid body tracking pipeline.
+"""Rigid body tracking pipeline with chunking support.
 
 Optimizes rigid body pose from noisy marker measurements.
-Inherits from BasePipeline and uses Phase 1 + Phase 2 components.
+Supports both single-pass and chunked parallel optimization for long recordings.
 """
 import shutil
-
 import numpy as np
 import logging
 from pathlib import Path
 from dataclasses import dataclass
 
-from pydantic import model_validator
+from pydantic import model_validator, Field
 
 from skellysolver.io.viewers.templates.template_helpers import get_template_path, get_output_path
 from skellysolver.pipelines.topology import RigidBodyTopology
 from skellysolver.pipelines.metrics import evaluate_reconstruction
 from skellysolver.pipelines.savers import save_topology_json, save_trajectory_csv, save_evaluation_report
-from skellysolver.core.config import RigidBodyWeightConfig
+from skellysolver.core.config import RigidBodyWeightConfig, ParallelConfig
 from skellysolver.core.cost_functions import RigidPoint3DMeasurementBundleAdjustment, RigidEdgeCost, SoftEdgeCost, \
     RotationSmoothnessCost, TranslationSmoothnessCost, ReferenceAnchorCost
 from skellysolver.core.result import RigidBodyResult
 from skellysolver.core.optimizer import Optimizer
+from skellysolver.core.chunking import optimize_chunked_parallel, optimize_chunked_sequential
 from skellysolver.data.base_data import TrajectoryDataset
 from skellysolver.data.loaders import load_trajectories
 from skellysolver.data.validators import (
@@ -49,6 +49,7 @@ class RigidBodyConfig(PipelineConfig):
         min_confidence: Minimum confidence for filtering
         interpolate_missing: Whether to interpolate missing data
         use_bundle_adjustment: Joint optimization of pose + geometry
+        parallel: Optional parallel processing configuration
     """
 
     topology: RigidBodyTopology
@@ -58,6 +59,7 @@ class RigidBodyConfig(PipelineConfig):
     min_confidence: float = 0.3
     interpolate_missing_data: bool = True
     use_bundle_adjustment: bool = True
+    parallel: ParallelConfig | None = Field(default_factory=ParallelConfig)
 
     @model_validator(mode='after')
     def set_defaults_and_validate(self) -> 'RigidBodyConfig':
@@ -70,21 +72,26 @@ class RigidBodyConfig(PipelineConfig):
             if self.soft_distances is None:
                 raise ValueError("soft_distances required when soft_edges provided")
 
+        # Set default parallel config if not provided
+        if self.parallel is None:
+            self.parallel = ParallelConfig()
+
         return self
 
 
 class RigidBodyPipeline(BasePipeline):
-    """Rigid body tracking pipeline.
+    """Rigid body tracking pipeline with chunking support.
 
     Optimizes rigid body pose from noisy marker measurements.
     Uses bundle adjustment to jointly optimize reference geometry and poses.
+    Supports chunked parallel optimization for long recordings.
 
     Usage:
         from skellysolver.pipelines.rigid_body import (
             RigidBodyPipeline,
             RigidBodyConfig,
         )
-        from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig
+        from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig, ParallelConfig
         from skellysolver.core.topology import RigidBodyTopology
 
         # Define topology
@@ -94,12 +101,18 @@ class RigidBodyPipeline(BasePipeline):
             name="simple_triangle"
         )
 
-        # Configure
+        # Configure with parallel processing
         config = RigidBodyConfig(
             input_path=Path("data.csv"),
             output_dir=Path("output/"),
             topology=topology,
             optimization=OptimizationConfig(max_iterations=300),
+            parallel=ParallelConfig(
+                enabled=True,
+                chunk_size=500,
+                overlap_size=50,
+                blend_window=25
+            )
         )
 
         # Run
@@ -202,11 +215,10 @@ class RigidBodyPipeline(BasePipeline):
         return data
 
     def optimize(self, *, data: TrajectoryDataset) -> RigidBodyResult:
-        """Run rigid body optimization.
+        """Run rigid body optimization with optional chunking.
 
-        Uses bundle adjustment to jointly optimize:
-        - Reference geometry (marker positions in body frame)
-        - Poses for each frame (rotation + translation)
+        Automatically selects between single-pass and chunked optimization
+        based on data size and parallel configuration.
 
         Args:
             data: Preprocessed data
@@ -222,16 +234,43 @@ class RigidBodyPipeline(BasePipeline):
 
         logger.info(f"  Data shape: {noisy_data.shape}")
 
-        # Estimate initial reference geometry (median frame, centered)
+        # Check if we should use chunked optimization
+        use_chunking = (
+            self.config.parallel is not None and
+            self.config.parallel.should_use_parallel(n_frames=n_frames)
+        )
+
+        if use_chunking:
+            return self._optimize_chunked(data=noisy_data)
+        else:
+            return self._optimize_single_pass(data=noisy_data)
+
+    def _optimize_single_pass(self, *, data: np.ndarray) -> RigidBodyResult:
+        """Run standard single-pass optimization.
+
+        Processes all frames in one optimization run. This is the core optimizer
+        used both for small datasets and as the per-chunk optimizer in chunked mode.
+
+        Args:
+            data: (n_frames, n_markers, 3) positions
+
+        Returns:
+            RigidBodyResult
+        """
+        n_frames, n_markers, _ = data.shape
+
+        logger.info("  Using SINGLE-PASS optimization")
+
+        # Estimate initial reference geometry
         logger.info("  Estimating initial reference geometry...")
-        median_frame = np.median(noisy_data, axis=0)
+        median_frame = np.median(data, axis=0)
         reference_geometry = median_frame - np.mean(median_frame, axis=0)
         reference_params = reference_geometry.flatten().copy()
 
         # Estimate rigid edge distances
         logger.info("  Estimating rigid edge distances...")
         reference_distances = self._estimate_edge_distances(
-            data=noisy_data,
+            data=data,
             edges=self.config.topology.rigid_edges
         )
 
@@ -240,7 +279,7 @@ class RigidBodyPipeline(BasePipeline):
         if self.config.soft_edges is not None:
             logger.info("  Estimating soft edge distances...")
             soft_distances_dict = self._estimate_edge_distances(
-                data=noisy_data,
+                data=data,
                 edges=self.config.soft_edges
             )
 
@@ -251,7 +290,7 @@ class RigidBodyPipeline(BasePipeline):
 
         translations = np.zeros((n_frames, 3))
         for i in range(n_frames):
-            translations[i] = np.mean(noisy_data[i], axis=0)
+            translations[i] = np.mean(data[i], axis=0)
 
         # Build optimization problem
         logger.info("  Building optimization problem...")
@@ -279,7 +318,7 @@ class RigidBodyPipeline(BasePipeline):
         for i in range(n_frames):
             for j in range(n_markers):
                 cost = RigidPoint3DMeasurementBundleAdjustment(
-                    measured_point=noisy_data[i, j],
+                    measured_point=data[i, j],
                     marker_idx=j,
                     n_markers=n_markers,
                     weight=self.config.weights.lambda_data
@@ -310,7 +349,7 @@ class RigidBodyPipeline(BasePipeline):
             for frame_idx in range(n_frames):
                 for i, j in self.config.soft_edges:
                     cost = SoftEdgeCost(
-                        measured_point=noisy_data[frame_idx, j],
+                        measured_point=data[frame_idx, j],
                         marker_idx=i,
                         n_markers=n_markers,
                         target_distance=soft_distances_dict[i, j],
@@ -393,11 +432,80 @@ class RigidBodyPipeline(BasePipeline):
             metadata={
                 "n_frames": n_frames,
                 "n_markers": n_markers,
-                "topology": self.config.topology.name
+                "topology": self.config.topology.name,
+                "optimization_mode": "single_pass"
             }
         )
 
         logger.info("✓ Optimization complete")
+
+        return rigid_result
+
+    def _optimize_chunked(self, *, data: np.ndarray) -> RigidBodyResult:
+        """Run chunked optimization with blending.
+
+        Splits data into overlapping chunks, optimizes each chunk independently
+        (using _optimize_single_pass), then smoothly blends the results.
+
+        Args:
+            data: (n_frames, n_markers, 3) positions
+
+        Returns:
+            RigidBodyResult
+        """
+        n_frames, n_markers, _ = data.shape
+
+        parallel_mode = "PARALLEL" if self.config.parallel.enabled else "SEQUENTIAL"
+        logger.info(f"  Using CHUNKED {parallel_mode} optimization")
+        logger.info(f"  Chunk size: {self.config.parallel.chunk_size}")
+        logger.info(f"  Overlap: {self.config.parallel.overlap_size}")
+        logger.info(f"  Blend window: {self.config.parallel.blend_window}")
+
+        # Choose chunking mode
+        if self.config.parallel.enabled:
+            rotations, translations, reconstructed = optimize_chunked_parallel(
+                noisy_data=data,
+                chunk_size=self.config.parallel.chunk_size,
+                overlap_size=self.config.parallel.overlap_size,
+                blend_window=self.config.parallel.blend_window,
+                min_chunk_size=self.config.parallel.min_chunk_size,
+                n_workers=self.config.parallel.get_num_workers(),
+                optimize_fn=self._optimize_single_pass
+            )
+        else:
+            rotations, translations, reconstructed = optimize_chunked_sequential(
+                noisy_data=data,
+                chunk_size=self.config.parallel.chunk_size,
+                overlap_size=self.config.parallel.overlap_size,
+                blend_window=self.config.parallel.blend_window,
+                min_chunk_size=self.config.parallel.min_chunk_size,
+                optimize_fn=self._optimize_single_pass
+            )
+
+        # Extract reference geometry (use median frame as approximation)
+        median_frame = np.median(data, axis=0)
+        reference_geometry = median_frame - np.mean(median_frame, axis=0)
+
+        # Create result
+        rigid_result = RigidBodyResult(
+            success=True,
+            num_iterations=0,  # Not applicable for chunked
+            initial_cost=0.0,
+            final_cost=0.0,
+            solve_time_seconds=0.0,  # Tracked separately
+            reconstructed=reconstructed,
+            rotations=rotations,
+            translations=translations,
+            reference_geometry=reference_geometry,
+            metadata={
+                "n_frames": n_frames,
+                "n_markers": n_markers,
+                "topology": self.config.topology.name,
+                "optimization_mode": parallel_mode.lower()
+            }
+        )
+
+        logger.info("✓ Chunked optimization complete")
 
         return rigid_result
 
@@ -463,8 +571,6 @@ class RigidBodyPipeline(BasePipeline):
         """
         logger.info("Saving results...")
 
-
-
         # Get noisy data
         noisy_data = self.data.to_array(marker_names=self.config.topology.marker_names)
 
@@ -498,6 +604,7 @@ class RigidBodyPipeline(BasePipeline):
                 "n_frames": result.n_frames,
                 "n_markers": result.n_markers,
                 "optimization": {
+                    "mode": result.metadata.get("optimization_mode", "unknown"),
                     "max_iterations": self.config.optimization.max_iterations,
                     "weights": {
                         "data": self.config.weights.lambda_data,
@@ -506,7 +613,11 @@ class RigidBodyPipeline(BasePipeline):
                         "rot_smooth": self.config.weights.lambda_rot_smooth,
                         "trans_smooth": self.config.weights.lambda_trans_smooth,
                     }
-                }
+                },
+                "parallel": {
+                    "enabled": self.config.parallel.enabled if self.config.parallel else False,
+                    "chunk_size": self.config.parallel.chunk_size if self.config.parallel else None,
+                } if self.config.parallel else None
             }
         )
         logger.info("  ✓ Saved metrics.json")
@@ -546,7 +657,6 @@ class RigidBodyPipeline(BasePipeline):
 
         logger.info(f"  ✓ Generated {viewer_path.name}")
         logger.info(f"  → Open {viewer_path} in a browser to visualize")
-
 
     def _estimate_edge_distances(
         self,
