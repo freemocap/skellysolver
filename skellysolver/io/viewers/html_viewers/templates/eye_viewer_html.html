@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eye Tracking Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0a0a0a;
+            color: white;
+            overflow: hidden;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #viewers {
+            flex: 1;
+            display: flex;
+            gap: 2px;
+            min-height: 100px;
+        }
+        #viewer-3d {
+            flex: 1;
+            position: relative;
+            background: #0a0a0a;
+        }
+        #viewer-2d {
+            flex: 1;
+            position: relative;
+            background: #0a0a0a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #canvas-2d {
+            border: 2px solid #333;
+            image-rendering: pixelated;
+        }
+        #controls {
+            background: #1a1a1a;
+            border-top: 2px solid #333;
+            padding: 15px 20px;
+            flex-shrink: 0;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background: #1d4ed8; }
+        button.reset { background: #4b5563; }
+        button.reset:hover { background: #374151; }
+        input[type="range"] {
+            flex: 1;
+            min-width: 150px;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .text-sm { font-size: 14px; }
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            max-width: 300px;
+        }
+        .info-row {
+            margin-bottom: 5px;
+            color: #9ca3af;
+        }
+        .info-label { color: #60a5fa; font-weight: 600; }
+        .legend {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 11px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+        .viewer-title {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="viewers">
+            <!-- 3D Viewer -->
+            <div id="viewer-3d">
+                <div class="viewer-title">3D Eye Model</div>
+                <div class="info-panel">
+                    <div class="info-row"><span class="info-label">Frames:</span> <span id="info-frames">-</span></div>
+                    <div class="info-row"><span class="info-label">Gaze Az:</span> <span id="info-azimuth">-</span></div>
+                    <div class="info-row"><span class="info-label">Gaze El:</span> <span id="info-elevation">-</span></div>
+                    <div class="info-row"><span class="info-label">Pupil Scale:</span> <span id="info-scale">-</span></div>
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #60a5fa;"></div>
+                        <span>Eyeball</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f87171;"></div>
+                        <span>Pupil</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4ade80;"></div>
+                        <span>Tear Duct</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #fbbf24;"></div>
+                        <span>Gaze Direction</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2D Viewer -->
+            <div id="viewer-2d">
+                <div class="viewer-title">2D Image Projection</div>
+                <canvas id="canvas-2d" width="400" height="400"></canvas>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #60a5fa;"></div>
+                        <span>Observed</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f87171;"></div>
+                        <span>Reprojected</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4ade80;"></div>
+                        <span>Tear Duct</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div class="control-row">
+                <button id="playBtn">▶ Play</button>
+                <button class="reset" id="resetBtn">⟲ Reset</button>
+                <input type="range" id="frameSlider" min="0" max="0" value="0">
+                <span class="text-sm"><span id="currentFrame">0</span> / <span id="totalFrames">0</span></span>
+            </div>
+
+            <div class="control-row">
+                <label><input type="checkbox" id="showEyeball" checked> Eyeball</label>
+                <label><input type="checkbox" id="showPupil" checked> Pupil</label>
+                <label><input type="checkbox" id="showTearDuct" checked> Tear Duct</label>
+                <label><input type="checkbox" id="showGaze" checked> Gaze Ray</label>
+                <label><input type="checkbox" id="showObserved" checked> Observed</label>
+                <label><input type="checkbox" id="showReprojected" checked> Reprojected</label>
+                <label><input type="checkbox" id="autoRotate"> Auto-Rotate</label>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // EMBEDDED DATA
+        const eyeData = __DATA_JSON__;
+        const eyeModelData = __EYE_MODEL_JSON__;
+        const N_FRAMES = __N_FRAMES__;
+
+        // Parse data
+        const frames = eyeData;
+
+        // Camera parameters (from eye model or defaults)
+        const CAMERA = eyeModelData.camera || {
+            fx: 529.0,
+            fy: 529.0,
+            cx: 200.0,
+            cy: 200.0,
+            width: 400,
+            height: 400
+        };
+
+        // Eye model parameters (from eye model or defaults)
+        const EYE_MODEL = {
+            eyeball_center: eyeModelData.eyeball_center_mm || [0, 0, 20],
+            base_semi_major: eyeModelData.base_semi_major_mm || 2.0,
+            base_semi_minor: eyeModelData.base_semi_minor_mm || 1.5,
+            tear_duct_offset: eyeModelData.tear_duct_offset_mm || [2.0, 1.0, 0.0]
+        };
+
+        // State
+        let currentFrame = 0;
+        let isPlaying = false;
+        let showEyeball = true;
+        let showPupil = true;
+        let showTearDuct = true;
+        let showGaze = true;
+        let showObserved = true;
+        let showReprojected = true;
+        let autoRotate = false;
+
+        let scene, camera3d, renderer, controls;
+        let eyeballMesh, pupilGroup, tearDuctMesh, gazeArrow;
+        let canvas2d, ctx2d;
+        let playInterval = null;
+
+        // Simple OrbitControls
+        THREE.OrbitControls = function(camera, domElement) {
+            this.camera = camera;
+            this.domElement = domElement;
+            const scope = this;
+            const STATE = { NONE: -1, ROTATE: 0, PAN: 2 };
+            let state = STATE.NONE;
+            const rotateStart = new THREE.Vector2();
+            const rotateEnd = new THREE.Vector2();
+            const rotateDelta = new THREE.Vector2();
+            const panStart = new THREE.Vector2();
+            const panEnd = new THREE.Vector2();
+            const panDelta = new THREE.Vector2();
+            const spherical = new THREE.Spherical();
+            const sphericalDelta = new THREE.Spherical();
+            let scale = 1;
+            const panOffset = new THREE.Vector3();
+            const target = new THREE.Vector3(0, 0, 20);
+
+            function rotateLeft(angle) { sphericalDelta.theta -= angle; }
+            function rotateUp(angle) { sphericalDelta.phi -= angle; }
+
+            function pan(deltaX, deltaY) {
+                const offset = new THREE.Vector3();
+                offset.copy(scope.camera.position).sub(target);
+                let targetDistance = offset.length();
+                targetDistance *= Math.tan((scope.camera.fov / 2) * Math.PI / 180.0);
+                const v = new THREE.Vector3();
+                v.setFromMatrixColumn(scope.camera.matrix, 0);
+                v.multiplyScalar(-2 * deltaX * targetDistance / scope.domElement.clientHeight);
+                panOffset.add(v);
+                v.setFromMatrixColumn(scope.camera.matrix, 1);
+                v.multiplyScalar(2 * deltaY * targetDistance / scope.domElement.clientHeight);
+                panOffset.add(v);
+            }
+
+            function dollyIn(dollyScale) { scale /= dollyScale; }
+            function dollyOut(dollyScale) { scale *= dollyScale; }
+
+            this.update = function() {
+                const offset = new THREE.Vector3();
+                offset.copy(scope.camera.position).sub(target);
+                const quat = new THREE.Quaternion().setFromUnitVectors(camera.up, new THREE.Vector3(0, 1, 0));
+                const quatInverse = quat.clone().invert();
+                offset.applyQuaternion(quat);
+                spherical.setFromVector3(offset);
+                spherical.theta += sphericalDelta.theta;
+                spherical.phi += sphericalDelta.phi;
+                spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi));
+                spherical.makeSafe();
+                spherical.radius *= scale;
+                target.add(panOffset);
+                offset.setFromSpherical(spherical);
+                offset.applyQuaternion(quatInverse);
+                scope.camera.position.copy(target).add(offset);
+                scope.camera.lookAt(target);
+                sphericalDelta.set(0, 0, 0);
+                panOffset.set(0, 0, 0);
+                scale = 1;
+            };
+
+            function onMouseDown(event) {
+                event.preventDefault();
+                if (event.button === 0) {
+                    rotateStart.set(event.clientX, event.clientY);
+                    state = STATE.ROTATE;
+                } else if (event.button === 2) {
+                    panStart.set(event.clientX, event.clientY);
+                    state = STATE.PAN;
+                }
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            }
+
+            function onMouseMove(event) {
+                event.preventDefault();
+                if (state === STATE.ROTATE) {
+                    rotateEnd.set(event.clientX, event.clientY);
+                    rotateDelta.subVectors(rotateEnd, rotateStart);
+                    rotateLeft(2 * Math.PI * rotateDelta.x / scope.domElement.clientHeight);
+                    rotateUp(2 * Math.PI * rotateDelta.y / scope.domElement.clientHeight);
+                    rotateStart.copy(rotateEnd);
+                    scope.update();
+                } else if (state === STATE.PAN) {
+                    panEnd.set(event.clientX, event.clientY);
+                    panDelta.subVectors(panEnd, panStart);
+                    pan(panDelta.x, panDelta.y);
+                    panStart.copy(panEnd);
+                    scope.update();
+                }
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                state = STATE.NONE;
+            }
+
+            function onMouseWheel(event) {
+                event.preventDefault();
+                if (event.deltaY < 0) dollyOut(0.95);
+                else if (event.deltaY > 0) dollyIn(0.95);
+                scope.update();
+            }
+
+            domElement.addEventListener('mousedown', onMouseDown);
+            domElement.addEventListener('wheel', onMouseWheel);
+            domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+        };
+
+        function initThreeJS() {
+            const container = document.getElementById('viewer-3d');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+
+            camera3d = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            camera3d.position.set(30, 30, 50);
+            camera3d.lookAt(0, 0, 20);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera3d, renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 50, 50);
+            scene.add(directionalLight);
+
+            // Create eyeball
+            const eyeballGeometry = new THREE.SphereGeometry(10, 32, 32);
+            const eyeballMaterial = new THREE.MeshStandardMaterial({
+                color: 0x60a5fa,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
+            eyeballMesh = new THREE.Mesh(eyeballGeometry, eyeballMaterial);
+            eyeballMesh.position.set(
+                EYE_MODEL.eyeball_center[0],
+                EYE_MODEL.eyeball_center[1],
+                EYE_MODEL.eyeball_center[2]
+            );
+            scene.add(eyeballMesh);
+
+            // Create pupil group
+            pupilGroup = new THREE.Group();
+            scene.add(pupilGroup);
+
+            // Create tear duct
+            const tearDuctGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+            const tearDuctMaterial = new THREE.MeshStandardMaterial({
+                color: 0x4ade80
+            });
+            tearDuctMesh = new THREE.Mesh(tearDuctGeometry, tearDuctMaterial);
+            scene.add(tearDuctMesh);
+
+            // Create gaze arrow
+            gazeArrow = new THREE.ArrowHelper(
+                new THREE.Vector3(0, 0, 1),
+                new THREE.Vector3(0, 0, 20),
+                15,
+                0xfbbf24,
+                3,
+                2
+            );
+            scene.add(gazeArrow);
+
+            // Add axes helper
+            const axesHelper = new THREE.AxesHelper(5);
+            scene.add(axesHelper);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                if (autoRotate) {
+                    const time = Date.now() * 0.0001;
+                    camera3d.position.x = 50 * Math.cos(time);
+                    camera3d.position.z = 50 * Math.sin(time) + 20;
+                    camera3d.lookAt(0, 0, 20);
+                }
+                controls.update();
+                renderer.render(scene, camera3d);
+            }
+            animate();
+
+            window.addEventListener('resize', () => {
+                const w = container.clientWidth;
+                const h = container.clientHeight;
+                camera3d.aspect = w / h;
+                camera3d.updateProjectionMatrix();
+                renderer.setSize(w, h);
+            });
+        }
+
+        function init2DCanvas() {
+            canvas2d = document.getElementById('canvas-2d');
+            ctx2d = canvas2d.getContext('2d');
+        }
+
+        function createPupilEllipse(gazeX, gazeY, gazeZ, scale) {
+            pupilGroup.clear();
+
+            // Create rotation from gaze direction
+            const gazeDir = new THREE.Vector3(gazeX, gazeY, gazeZ).normalize();
+            const up = new THREE.Vector3(0, 1, 0);
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(
+                new THREE.Vector3(0, 0, 1),
+                gazeDir
+            );
+
+            // Create pupil ellipse points
+            const nPoints = 32;
+            const points = [];
+            for (let i = 0; i <= nPoints; i++) {
+                const theta = (i / nPoints) * Math.PI * 2;
+                const x = EYE_MODEL.base_semi_major * scale * Math.cos(theta);
+                const y = EYE_MODEL.base_semi_minor * scale * Math.sin(theta);
+                const point = new THREE.Vector3(x, y, 0);
+                point.applyQuaternion(quaternion);
+                point.add(new THREE.Vector3(
+                    EYE_MODEL.eyeball_center[0],
+                    EYE_MODEL.eyeball_center[1],
+                    EYE_MODEL.eyeball_center[2]
+                ));
+                points.push(point);
+            }
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({
+                color: 0xf87171,
+                linewidth: 3
+            });
+            const ellipse = new THREE.Line(geometry, material);
+            pupilGroup.add(ellipse);
+
+            // Add pupil center point
+            const centerGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const centerMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff4444
+            });
+            const centerMesh = new THREE.Mesh(centerGeometry, centerMaterial);
+            centerMesh.position.copy(new THREE.Vector3(
+                EYE_MODEL.eyeball_center[0],
+                EYE_MODEL.eyeball_center[1],
+                EYE_MODEL.eyeball_center[2]
+            ));
+            pupilGroup.add(centerMesh);
+        }
+
+        function update3DVisualization() {
+            const frame = frames[currentFrame];
+
+            // Update pupil
+            createPupilEllipse(
+                frame.gaze_x,
+                frame.gaze_y,
+                frame.gaze_z,
+                frame.pupil_scale
+            );
+
+            // Update tear duct
+            tearDuctMesh.position.set(
+                EYE_MODEL.eyeball_center[0] + EYE_MODEL.tear_duct_offset[0],
+                EYE_MODEL.eyeball_center[1] + EYE_MODEL.tear_duct_offset[1],
+                EYE_MODEL.eyeball_center[2] + EYE_MODEL.tear_duct_offset[2]
+            );
+
+            // Update gaze arrow
+            const gazeDir = new THREE.Vector3(frame.gaze_x, frame.gaze_y, frame.gaze_z).normalize();
+            gazeArrow.position.copy(new THREE.Vector3(
+                EYE_MODEL.eyeball_center[0],
+                EYE_MODEL.eyeball_center[1],
+                EYE_MODEL.eyeball_center[2]
+            ));
+            gazeArrow.setDirection(gazeDir);
+
+            // Update visibility
+            eyeballMesh.visible = showEyeball;
+            pupilGroup.visible = showPupil;
+            tearDuctMesh.visible = showTearDuct;
+            gazeArrow.visible = showGaze;
+
+            // Update info panel
+            document.getElementById('info-azimuth').textContent = frame.gaze_azimuth_deg.toFixed(1) + '°';
+            document.getElementById('info-elevation').textContent = frame.gaze_elevation_deg.toFixed(1) + '°';
+            document.getElementById('info-scale').textContent = frame.pupil_scale.toFixed(3);
+        }
+
+        function update2DVisualization() {
+            ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+
+            // Draw background
+            ctx2d.fillStyle = '#1a1a1a';
+            ctx2d.fillRect(0, 0, canvas2d.width, canvas2d.height);
+
+            // For demo, generate synthetic observed pupil points in a circle
+            // In real implementation, these would come from the data
+            const centerX = 200;
+            const centerY = 200;
+            const radiusObs = 50;
+            const nPoints = 8;
+
+            // Draw observed points (blue)
+            if (showObserved) {
+                ctx2d.fillStyle = '#60a5fa';
+                ctx2d.strokeStyle = '#60a5fa';
+                ctx2d.lineWidth = 2;
+
+                ctx2d.beginPath();
+                for (let i = 0; i < nPoints; i++) {
+                    const theta = (i / nPoints) * Math.PI * 2;
+                    const x = centerX + radiusObs * Math.cos(theta);
+                    const y = centerY + radiusObs * Math.sin(theta);
+                    
+                    if (i === 0) ctx2d.moveTo(x, y);
+                    else ctx2d.lineTo(x, y);
+                    
+                    // Draw point
+                    ctx2d.beginPath();
+                    ctx2d.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx2d.fill();
+                    ctx2d.beginPath();
+                }
+                ctx2d.closePath();
+                ctx2d.stroke();
+            }
+
+            // Draw reprojected points (red)
+            if (showReprojected) {
+                const frame = frames[currentFrame];
+                const radiusReproj = radiusObs * frame.pupil_scale;
+
+                ctx2d.fillStyle = '#f87171';
+                ctx2d.strokeStyle = '#f87171';
+                ctx2d.lineWidth = 2;
+
+                ctx2d.beginPath();
+                for (let i = 0; i < nPoints; i++) {
+                    const theta = (i / nPoints) * Math.PI * 2;
+                    const x = centerX + radiusReproj * Math.cos(theta);
+                    const y = centerY + radiusReproj * Math.sin(theta);
+                    
+                    if (i === 0) ctx2d.moveTo(x, y);
+                    else ctx2d.lineTo(x, y);
+                    
+                    // Draw point
+                    ctx2d.beginPath();
+                    ctx2d.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx2d.fill();
+                    ctx2d.beginPath();
+                }
+                ctx2d.closePath();
+                ctx2d.stroke();
+
+                // Draw center
+                ctx2d.fillStyle = '#ff4444';
+                ctx2d.beginPath();
+                ctx2d.arc(centerX, centerY, 5, 0, Math.PI * 2);
+                ctx2d.fill();
+            }
+
+            // Draw tear duct (green)
+            if (showTearDuct) {
+                // Observed
+                ctx2d.fillStyle = '#4ade80';
+                ctx2d.beginPath();
+                ctx2d.arc(150, 250, 5, 0, Math.PI * 2);
+                ctx2d.fill();
+
+                // Reprojected (slightly offset for demo)
+                ctx2d.fillStyle = '#86efac';
+                ctx2d.beginPath();
+                ctx2d.arc(155, 253, 4, 0, Math.PI * 2);
+                ctx2d.fill();
+            }
+
+            // Draw error text
+            const frame = frames[currentFrame];
+            ctx2d.fillStyle = '#9ca3af';
+            ctx2d.font = '12px monospace';
+            ctx2d.fillText(`Pupil Error: ${frame.pupil_error_px.toFixed(2)} px`, 10, 20);
+            ctx2d.fillText(`Tear Duct Error: ${frame.tear_duct_error_px.toFixed(2)} px`, 10, 35);
+        }
+
+        function updateVisualization() {
+            update3DVisualization();
+            update2DVisualization();
+            document.getElementById('currentFrame').textContent = currentFrame;
+        }
+
+        // Event listeners
+        document.getElementById('playBtn').addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            document.getElementById('playBtn').innerHTML = isPlaying ? '⏸ Pause' : '▶ Play';
+
+            if (isPlaying) {
+                playInterval = setInterval(() => {
+                    currentFrame = (currentFrame + 1) % N_FRAMES;
+                    document.getElementById('frameSlider').value = currentFrame;
+                    updateVisualization();
+                }, 33);
+            } else {
+                clearInterval(playInterval);
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            currentFrame = 0;
+            isPlaying = false;
+            clearInterval(playInterval);
+            document.getElementById('playBtn').innerHTML = '▶ Play';
+            document.getElementById('frameSlider').value = 0;
+            updateVisualization();
+        });
+
+        document.getElementById('frameSlider').addEventListener('input', (e) => {
+            currentFrame = parseInt(e.target.value);
+            updateVisualization();
+        });
+
+        document.getElementById('showEyeball').addEventListener('change', (e) => {
+            showEyeball = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showPupil').addEventListener('change', (e) => {
+            showPupil = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showTearDuct').addEventListener('change', (e) => {
+            showTearDuct = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showGaze').addEventListener('change', (e) => {
+            showGaze = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showObserved').addEventListener('change', (e) => {
+            showObserved = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showReprojected').addEventListener('change', (e) => {
+            showReprojected = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('autoRotate').addEventListener('change', (e) => {
+            autoRotate = e.target.checked;
+        });
+
+        // Initialize
+        document.getElementById('frameSlider').max = N_FRAMES - 1;
+        document.getElementById('totalFrames').textContent = N_FRAMES - 1;
+        document.getElementById('info-frames').textContent = N_FRAMES;
+
+        initThreeJS();
+        init2DCanvas();
+        updateVisualization();
+    </script>
+</body>
+</html>

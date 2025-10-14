@@ -21,7 +21,7 @@ from skellysolver.io.viewers.html_viewers.base_viewer import (
     BaseViewerGenerator,
     HTMLViewerGenerator,
 )
-from skellysolver.io.viewers.html_viewers.eye_viewer import generate_eye_tracking_viewer, generate_rigid_body_viewer
+from skellysolver.io.viewers.html_viewers.eye_viewer import generate_eye_tracking_viewer
 from skellysolver.io.viewers.html_viewers.rigid_viewer import RigidBodyViewerGenerator
 
 
@@ -32,7 +32,6 @@ __all__ = [
     # Specialized viewers
     "RigidBodyViewerGenerator",
     # Convenience functions
-    "generate_rigid_body_viewer",
     "generate_eye_tracking_viewer",
 ]
 

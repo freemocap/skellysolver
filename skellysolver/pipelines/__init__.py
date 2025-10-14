@@ -56,10 +56,8 @@ from .rigid_body_pipeline import (
 from .eye_pipeline import (
     EyeTrackingPipeline,
     EyeTrackingConfig,
-    EyeModel,
     CameraIntrinsics,
 )
-
 __all__ = [
     # Base
     "BasePipeline",

@@ -64,7 +64,6 @@ from .viewers import (
     BaseViewerGenerator,
     HTMLViewerGenerator,
     RigidBodyViewerGenerator,
-    generate_rigid_body_viewer,
     generate_eye_tracking_viewer,
 )
 
