@@ -187,7 +187,7 @@ class RigidBodyResult(OptimizationResult):
     @model_validator(mode="after")
     def validate(self) -> Self:
         """Validate rigid body result."""
-        super().__post_init__()
+
         
         # Check required fields
         if self.reconstructed is None:
@@ -231,11 +231,11 @@ class EyeTrackingResult(OptimizationResult):
     projected_tear_ducts: np.ndarray | None = None
     pupil_errors: np.ndarray | None = None
     tear_duct_errors: np.ndarray | None = None
-    
-    def __post_init__(self) -> None:
-        """Validate eye tracking result."""
-        super().__post_init__()
-        
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+
+
         # Check required fields
         if self.rotations is None:
             raise ValueError("EyeTrackingResult requires rotations (eye orientations)")
@@ -243,6 +243,7 @@ class EyeTrackingResult(OptimizationResult):
             raise ValueError("EyeTrackingResult requires gaze_directions")
         if self.pupil_scales is None:
             raise ValueError("EyeTrackingResult requires pupil_scales")
+        return self
     
     @property
     def n_frames(self) -> int:
@@ -289,7 +290,7 @@ class ChunkedResult(ArbitraryTypesModel):
     @property
     def average_chunk_time(self) -> float:
         """Average time per chunk in seconds."""
-        return np.mean(self.chunk_times_seconds)
+        return float(np.mean(self.chunk_times_seconds))
     
     @property
     def speedup(self) -> float:

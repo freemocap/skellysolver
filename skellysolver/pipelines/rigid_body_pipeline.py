@@ -3,6 +3,7 @@
 Optimizes rigid body pose from noisy marker measurements.
 Inherits from BasePipeline and uses Phase 1 + Phase 2 components.
 """
+import shutil
 
 import numpy as np
 import logging
@@ -11,6 +12,7 @@ from dataclasses import dataclass
 
 from pydantic import model_validator
 
+from skellysolver.io.viewers.templates.template_helpers import get_template_path, get_output_path
 from skellysolver.pipelines.topology import RigidBodyTopology
 from skellysolver.pipelines.metrics import evaluate_reconstruction
 from skellysolver.pipelines.savers import save_topology_json, save_trajectory_csv, save_evaluation_report
@@ -528,19 +530,23 @@ class RigidBodyPipeline(BasePipeline):
         """
         logger.info("Generating viewer...")
 
-        # Copy viewer HTML template
-        import shutil
+        # Import the viewer generator
+        from skellysolver.io.viewers.rigid_viewer import RigidBodyViewerGenerator
 
-        viewer_template = Path(__file__).parent / "rigid_body_viewer.html"
-        viewer_output = self.config.output_dir / "rigid_body_viewer.html"
+        # Create generator instance
+        viewer_generator = RigidBodyViewerGenerator()
 
-        if viewer_template.exists():
-            shutil.copy(src=viewer_template, dst=viewer_output)
-            logger.info(f"  ✓ Generated {viewer_output.name}")
-            logger.info(f"  → Open {viewer_output} in a browser to visualize")
-        else:
-            logger.warning(f"  ⚠ Viewer template not found: {viewer_template}")
-            logger.warning("  Skipping viewer generation")
+        # Generate the viewer with embedded data
+        viewer_path = viewer_generator.generate(
+            output_dir=self.config.output_dir,
+            data_csv_path=self.config.output_dir / "trajectory_data.csv",
+            topology_json_path=self.config.output_dir / "topology.json",
+            video_path=None
+        )
+
+        logger.info(f"  ✓ Generated {viewer_path.name}")
+        logger.info(f"  → Open {viewer_path} in a browser to visualize")
+
 
     def _estimate_edge_distances(
         self,

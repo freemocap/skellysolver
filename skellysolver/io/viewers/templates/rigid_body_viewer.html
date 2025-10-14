@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rigid Body Tracking Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0a0a0a;
+            color: white;
+            overflow: hidden;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            min-height: 100px;
+        }
+        #controls {
+            background: #1a1a1a;
+            border-top: 2px solid #333;
+            padding: 15px 20px;
+            flex-shrink: 0;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background: #1d4ed8; }
+        button.reset { background: #4b5563; }
+        button.reset:hover { background: #374151; }
+        input[type="range"] {
+            flex: 1;
+            min-width: 150px;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .text-sm { font-size: 14px; }
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            max-width: 300px;
+        }
+        .info-row {
+            margin-bottom: 5px;
+            color: #9ca3af;
+        }
+        .info-label { color: #60a5fa; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container">
+            <div id="info-panel">
+                <div class="info-row"><span class="info-label">Rigid Body:</span> <span id="info-name">-</span></div>
+                <div class="info-row"><span class="info-label">Markers:</span> <span id="info-markers">-</span></div>
+                <div class="info-row"><span class="info-label">Frames:</span> <span id="info-frames">-</span></div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div class="control-row">
+                <button id="playBtn">▶ Play</button>
+                <button class="reset" id="resetBtn">↺ Reset</button>
+                <input type="range" id="frameSlider" min="0" max="0" value="0">
+                <span class="text-sm"><span id="currentFrame">0</span> / <span id="totalFrames">0</span></span>
+            </div>
+
+            <div class="control-row">
+                <label><input type="checkbox" id="showNoisy" checked> <span style="color: #f87171;">Noisy</span></label>
+                <label><input type="checkbox" id="showOptimized" checked> <span style="color: #60a5fa;">Optimized</span></label>
+                <label><input type="checkbox" id="showGroundTruth"> <span style="color: #4ade80;">Ground Truth</span></label>
+                <label><input type="checkbox" id="showGrid" checked> Grid</label>
+                <label><input type="checkbox" id="autoRotate"> Auto-Rotate</label>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        // EMBEDDED DATA
+        const trajectoryData = __DATA_JSON__;
+        const topologyData = __TOPOLOGY_JSON__;
+        const N_FRAMES = __N_FRAMES__;
+
+        // Parse data
+        const topology = topologyData.topology || topologyData;
+        const markerNames = topology.marker_names;
+        const rigidEdges = topology.rigid_edges || [];
+
+        // Extract frames
+        const noisyFrames = [];
+        const optimizedFrames = [];
+        const gtFrames = [];
+        let hasGT = false;
+
+        trajectoryData.forEach(row => {
+            const parseDataset = (prefix) => {
+                const points = [];
+                for (const name of markerNames) {
+                    points.push({
+                        x: row[`${prefix}_${name}_x`] || 0,
+                        y: row[`${prefix}_${name}_y`] || 0,
+                        z: row[`${prefix}_${name}_z`] || 0
+                    });
+                }
+                return { points };
+            };
+
+            noisyFrames.push(parseDataset('noisy'));
+            optimizedFrames.push(parseDataset('optimized'));
+
+            if (row[`gt_${markerNames[0]}_x`] !== undefined) {
+                hasGT = true;
+                gtFrames.push(parseDataset('gt'));
+            }
+        });
+
+        // State
+        let currentFrame = 0;
+        let isPlaying = false;
+        let showNoisy = true;
+        let showOptimized = true;
+        let showGroundTruth = false;
+        let showGrid = true;
+        let autoRotate = false;
+
+        let scene, camera, renderer, controls;
+        let noisyGroup, optimizedGroup, gtGroup, gridHelper;
+        let playInterval = null;
+
+        const MARKER_COLORS = [
+            0xff4444, 0x44ff44, 0x4444ff, 0xffff44,
+            0xff44ff, 0x44ffff, 0xff8844, 0x88ff44
+        ];
+
+        // Simple OrbitControls
+        THREE.OrbitControls = function(camera, domElement) {
+            this.camera = camera;
+            this.domElement = domElement;
+            const scope = this;
+            const STATE = { NONE: -1, ROTATE: 0, PAN: 2 };
+            let state = STATE.NONE;
+            const rotateStart = new THREE.Vector2();
+            const rotateEnd = new THREE.Vector2();
+            const rotateDelta = new THREE.Vector2();
+            const panStart = new THREE.Vector2();
+            const panEnd = new THREE.Vector2();
+            const panDelta = new THREE.Vector2();
+            const spherical = new THREE.Spherical();
+            const sphericalDelta = new THREE.Spherical();
+            let scale = 1;
+            const panOffset = new THREE.Vector3();
+            const target = new THREE.Vector3();
+
+            function rotateLeft(angle) { sphericalDelta.theta -= angle; }
+            function rotateUp(angle) { sphericalDelta.phi -= angle; }
+
+            function pan(deltaX, deltaY) {
+                const offset = new THREE.Vector3();
+                offset.copy(scope.camera.position).sub(target);
+                let targetDistance = offset.length();
+                targetDistance *= Math.tan((scope.camera.fov / 2) * Math.PI / 180.0);
+                const v = new THREE.Vector3();
+                v.setFromMatrixColumn(scope.camera.matrix, 0);
+                v.multiplyScalar(-2 * deltaX * targetDistance / scope.domElement.clientHeight);
+                panOffset.add(v);
+                v.setFromMatrixColumn(scope.camera.matrix, 1);
+                v.multiplyScalar(2 * deltaY * targetDistance / scope.domElement.clientHeight);
+                panOffset.add(v);
+            }
+
+            function dollyIn(dollyScale) { scale /= dollyScale; }
+            function dollyOut(dollyScale) { scale *= dollyScale; }
+
+            this.update = function() {
+                const offset = new THREE.Vector3();
+                offset.copy(scope.camera.position).sub(target);
+                const quat = new THREE.Quaternion().setFromUnitVectors(camera.up, new THREE.Vector3(0, 1, 0));
+                const quatInverse = quat.clone().invert();
+                offset.applyQuaternion(quat);
+                spherical.setFromVector3(offset);
+                spherical.theta += sphericalDelta.theta;
+                spherical.phi += sphericalDelta.phi;
+                spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi));
+                spherical.makeSafe();
+                spherical.radius *= scale;
+                target.add(panOffset);
+                offset.setFromSpherical(spherical);
+                offset.applyQuaternion(quatInverse);
+                scope.camera.position.copy(target).add(offset);
+                scope.camera.lookAt(target);
+                sphericalDelta.set(0, 0, 0);
+                panOffset.set(0, 0, 0);
+                scale = 1;
+            };
+
+            function onMouseDown(event) {
+                event.preventDefault();
+                if (event.button === 0) {
+                    rotateStart.set(event.clientX, event.clientY);
+                    state = STATE.ROTATE;
+                } else if (event.button === 2) {
+                    panStart.set(event.clientX, event.clientY);
+                    state = STATE.PAN;
+                }
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            }
+
+            function onMouseMove(event) {
+                event.preventDefault();
+                if (state === STATE.ROTATE) {
+                    rotateEnd.set(event.clientX, event.clientY);
+                    rotateDelta.subVectors(rotateEnd, rotateStart);
+                    rotateLeft(2 * Math.PI * rotateDelta.x / scope.domElement.clientHeight);
+                    rotateUp(2 * Math.PI * rotateDelta.y / scope.domElement.clientHeight);
+                    rotateStart.copy(rotateEnd);
+                    scope.update();
+                } else if (state === STATE.PAN) {
+                    panEnd.set(event.clientX, event.clientY);
+                    panDelta.subVectors(panEnd, panStart);
+                    pan(panDelta.x, panDelta.y);
+                    panStart.copy(panEnd);
+                    scope.update();
+                }
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                state = STATE.NONE;
+            }
+
+            function onMouseWheel(event) {
+                event.preventDefault();
+                if (event.deltaY < 0) dollyOut(0.95);
+                else if (event.deltaY > 0) dollyIn(0.95);
+                scope.update();
+            }
+
+            domElement.addEventListener('mousedown', onMouseDown);
+            domElement.addEventListener('wheel', onMouseWheel);
+            domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+        };
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+
+            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            camera.position.set(2, 2, 2);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 5);
+            scene.add(directionalLight);
+
+            noisyGroup = new THREE.Group();
+            optimizedGroup = new THREE.Group();
+            gtGroup = new THREE.Group();
+
+            scene.add(noisyGroup);
+            scene.add(optimizedGroup);
+            scene.add(gtGroup);
+
+            gridHelper = new THREE.GridHelper(5, 20, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                if (autoRotate) {
+                    const time = Date.now() * 0.0001;
+                    camera.position.x = 2 * Math.cos(time);
+                    camera.position.z = 2 * Math.sin(time);
+                    camera.lookAt(0, 0, 0);
+                }
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            window.addEventListener('resize', () => {
+                const w = container.clientWidth;
+                const h = container.clientHeight;
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+            });
+        }
+
+        function createRigidBody(frameData, color) {
+            const group = new THREE.Group();
+
+            // Create marker spheres
+            frameData.points.forEach((p, i) => {
+                const geometry = new THREE.SphereGeometry(0.08, 16, 16);
+                const material = new THREE.MeshStandardMaterial({
+                    color: MARKER_COLORS[i % MARKER_COLORS.length]
+                });
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.position.set(p.x, p.y, p.z);
+                group.add(sphere);
+            });
+
+            // Create edges
+            rigidEdges.forEach(([i, j]) => {
+                if (i < frameData.points.length && j < frameData.points.length) {
+                    const points = [
+                        new THREE.Vector3(frameData.points[i].x, frameData.points[i].y, frameData.points[i].z),
+                        new THREE.Vector3(frameData.points[j].x, frameData.points[j].y, frameData.points[j].z),
+                    ];
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    const material = new THREE.LineBasicMaterial({
+                        color: color,
+                        opacity: 0.6,
+                        transparent: true
+                    });
+                    const line = new THREE.Line(geometry, material);
+                    group.add(line);
+                }
+            });
+
+            return group;
+        }
+
+        function updateVisualization() {
+            noisyGroup.clear();
+            optimizedGroup.clear();
+            gtGroup.clear();
+
+            if (showNoisy) {
+                const noisy = createRigidBody(noisyFrames[currentFrame], 0xff4444);
+                noisyGroup.add(noisy);
+            }
+
+            if (showOptimized) {
+                const optimized = createRigidBody(optimizedFrames[currentFrame], 0x4444ff);
+                optimizedGroup.add(optimized);
+            }
+
+            if (showGroundTruth && hasGT) {
+                const gt = createRigidBody(gtFrames[currentFrame], 0x44ff44);
+                gtGroup.add(gt);
+            }
+
+            gridHelper.visible = showGrid;
+            document.getElementById('currentFrame').textContent = currentFrame;
+        }
+
+        // Event listeners
+        document.getElementById('playBtn').addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            document.getElementById('playBtn').innerHTML = isPlaying ? '⏸ Pause' : '▶ Play';
+
+            if (isPlaying) {
+                playInterval = setInterval(() => {
+                    currentFrame = (currentFrame + 1) % N_FRAMES;
+                    document.getElementById('frameSlider').value = currentFrame;
+                    updateVisualization();
+                }, 33);
+            } else {
+                clearInterval(playInterval);
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            currentFrame = 0;
+            isPlaying = false;
+            clearInterval(playInterval);
+            document.getElementById('playBtn').innerHTML = '▶ Play';
+            document.getElementById('frameSlider').value = 0;
+            updateVisualization();
+        });
+
+        document.getElementById('frameSlider').addEventListener('input', (e) => {
+            currentFrame = parseInt(e.target.value);
+            updateVisualization();
+        });
+
+        document.getElementById('showNoisy').addEventListener('change', (e) => {
+            showNoisy = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showOptimized').addEventListener('change', (e) => {
+            showOptimized = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showGroundTruth').addEventListener('change', (e) => {
+            showGroundTruth = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('showGrid').addEventListener('change', (e) => {
+            showGrid = e.target.checked;
+            updateVisualization();
+        });
+
+        document.getElementById('autoRotate').addEventListener('change', (e) => {
+            autoRotate = e.target.checked;
+        });
+
+        // Initialize
+        document.getElementById('frameSlider').max = N_FRAMES - 1;
+        document.getElementById('totalFrames').textContent = N_FRAMES - 1;
+        document.getElementById('info-name').textContent = topology.name || 'Unknown';
+        document.getElementById('info-markers').textContent = markerNames.length;
+        document.getElementById('info-frames').textContent = N_FRAMES;
+
+        if (hasGT) {
+            document.getElementById('showGroundTruth').parentElement.style.display = 'flex';
+        } else {
+            document.getElementById('showGroundTruth').parentElement.style.display = 'none';
+        }
+
+        initThreeJS();
+        updateVisualization();
+    </script>
+</body>
+</html>
