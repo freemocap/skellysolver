@@ -11,15 +11,12 @@ from pydantic import model_validator, Field
 from scipy.spatial.transform import Rotation
 
 from skellysolver.core.chunking import optimize_chunked_parallel, optimize_chunked_sequential, ChunkingConfig
+from skellysolver.core.optimization_result import RigidBodyResult
 from skellysolver.cost_primatives.edge_consts import RigidEdgeCost, SoftEdgeCost
 from skellysolver.cost_primatives.measurement_costs import RigidPoint3DMeasurementBundleAdjustment
 from skellysolver.cost_primatives.smoothness_costs import RotationSmoothnessCost, TranslationSmoothnessCost
 from skellysolver.data.arbitrary_types_model import ABaseModel
-from skellysolver.io.viewers.html_viewers.rigid_viewer import MocapViewerGenerator
-from skellysolver.solvers.pyceres_solver import PyceresOptimizer
-from skellysolver.core.optimization_result import RigidBodyResult
 from skellysolver.data.data_models import TrajectoryDataset
-from skellysolver.io.loaders import load_trajectories
 from skellysolver.data.preprocessing import (
     filter_by_confidence,
     interpolate_missing,
@@ -28,10 +25,13 @@ from skellysolver.data.validators import (
     validate_dataset,
     validate_topology_compatibility,
 )
+from skellysolver.io.loaders import load_trajectories
+from skellysolver.io.viewers.html_viewers.rigid_viewer import MocapViewerGenerator
+from skellysolver.io.writers.csv_writer import TidyCSVWriter
 from skellysolver.solvers import PipelineConfig, BasePipeline
 from skellysolver.solvers.mocap_solver.mocap_metrics import evaluate_mocap_reconstruction
-from skellysolver.io.writers.csv_writer import TidyCSVWriter
 from skellysolver.solvers.mocap_solver.mocap_topology import RigidBodyTopology
+from skellysolver.solvers.pyceres_solver import PyceresOptimizer
 
 logger = logging.getLogger(__name__)
 

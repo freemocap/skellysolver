@@ -9,9 +9,10 @@ Provides single interface: load_trajectories()
 """
 
 import csv
-import numpy as np
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from skellysolver.data.data_models import Trajectory3D, Observation2D, TrajectoryDataset
 from skellysolver.io.formats import detect_csv_format, CSVFormat

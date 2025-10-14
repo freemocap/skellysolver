@@ -3,10 +3,13 @@
 Tests CSV loading for all formats.
 """
 
-import numpy as np
-import pytest
 from pathlib import Path
 
+import numpy as np
+import pytest
+
+from skellysolver.data.data_models import TrajectoryDataset, Trajectory3D
+from skellysolver.io.formats import detect_csv_format
 from skellysolver.io.loaders import (
     load_trajectories,
     load_tidy_format,
@@ -15,8 +18,6 @@ from skellysolver.io.loaders import (
     load_from_dict,
     concatenate_datasets,
 )
-from skellysolver.io.formats import detect_csv_format
-from skellysolver.data.data_models import TrajectoryDataset, Trajectory3D
 
 
 class TestTidyFormatLoader:

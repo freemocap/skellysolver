@@ -4,7 +4,7 @@ Refactored linkages - using actual LinkageABC instances
 from typing import ClassVar
 
 from skellysolver.data.arbitrary_types_model import ABaseModel
-from skellysolver.solvers.mocap_solver.mocap_models.abstract_base_classes.linkage_abc import LinkageABC
+from skellysolver.data.primitive_objects.linkage_model import Linkage
 from .keypoints import HumanKeypoints as kp
 from .segments import HumanSegments as seg
 
@@ -19,7 +19,7 @@ class HumanLinkages(ABaseModel):
     """
 
     # Skull linkage - connects cervical spine to skull
-    SKULL_C1: ClassVar[LinkageABC] = LinkageABC(
+    SKULL_C1: ClassVar[Linkage] = Linkage(
         parent=seg.SPINE_CERVICAL,
         children=[
             seg.SKULL_NOSE,
@@ -38,7 +38,7 @@ class HumanLinkages(ABaseModel):
     )
 
     # Neck linkage - connects thoracic spine to cervical spine
-    NECK_C7: ClassVar[LinkageABC] = LinkageABC(
+    NECK_C7: ClassVar[Linkage] = Linkage(
         parent=seg.SPINE_THORACIC,
         children=[
             seg.SPINE_CERVICAL,
@@ -49,28 +49,28 @@ class HumanLinkages(ABaseModel):
     )
 
     # Chest linkage - connects lumbar spine to thoracic spine
-    CHEST_T12: ClassVar[LinkageABC] = LinkageABC(
+    CHEST_T12: ClassVar[Linkage] = Linkage(
         parent=seg.SPINE_SACRUM_LUMBAR,
         children=[seg.SPINE_THORACIC],
         linked_keypoint=[kp.SPINE_THORACIC_ORIGIN_T12]
     )
 
     # Right shoulder linkage
-    RIGHT_SHOULDER: ClassVar[LinkageABC] = LinkageABC(
+    RIGHT_SHOULDER: ClassVar[Linkage] = Linkage(
         parent=seg.RIGHT_CLAVICLE,
         children=[seg.RIGHT_ARM_PROXIMAL],
         linked_keypoint=[kp.RIGHT_SHOULDER]
     )
 
     # Right elbow linkage
-    RIGHT_ELBOW: ClassVar[LinkageABC] = LinkageABC(
+    RIGHT_ELBOW: ClassVar[Linkage] = Linkage(
         parent=seg.RIGHT_ARM_PROXIMAL,
         children=[seg.RIGHT_ARM_DISTAL],
         linked_keypoint=[kp.RIGHT_ELBOW]
     )
 
     # Right wrist linkage
-    RIGHT_WRIST: ClassVar[LinkageABC] = LinkageABC(
+    RIGHT_WRIST: ClassVar[Linkage] = Linkage(
         parent=seg.RIGHT_ARM_DISTAL,
         children=[
             seg.RIGHT_PALM_THUMB,
@@ -82,21 +82,21 @@ class HumanLinkages(ABaseModel):
 
     # Right hip linkage  
     # NOTE: Bug in original - used PELVIS_LEFT_HIP_ACETABULUM for right hip!
-    RIGHT_HIP: ClassVar[LinkageABC] = LinkageABC(
+    RIGHT_HIP: ClassVar[Linkage] = Linkage(
         parent=seg.PELVIS_RIGHT,
         children=[seg.RIGHT_LEG_THIGH],
         linked_keypoint=[kp.PELVIS_RIGHT_HIP_ACETABULUM]  # Fixed!
     )
 
     # Right knee linkage
-    RIGHT_KNEE: ClassVar[LinkageABC] = LinkageABC(
+    RIGHT_KNEE: ClassVar[Linkage] = Linkage(
         parent=seg.RIGHT_LEG_THIGH,
         children=[seg.RIGHT_LEG_CALF],
         linked_keypoint=[kp.RIGHT_KNEE]
     )
 
     # Right ankle linkage
-    RIGHT_ANKLE: ClassVar[LinkageABC] = LinkageABC(
+    RIGHT_ANKLE: ClassVar[Linkage] = Linkage(
         parent=seg.RIGHT_LEG_CALF,
         children=[
             seg.RIGHT_FOOT_HEEL,
@@ -106,21 +106,21 @@ class HumanLinkages(ABaseModel):
     )
 
     # Left shoulder linkage
-    LEFT_SHOULDER: ClassVar[LinkageABC] = LinkageABC(
+    LEFT_SHOULDER: ClassVar[Linkage] = Linkage(
         parent=seg.LEFT_CLAVICLE,
         children=[seg.LEFT_ARM_PROXIMAL],
         linked_keypoint=[kp.LEFT_SHOULDER]
     )
 
     # Left elbow linkage
-    LEFT_ELBOW: ClassVar[LinkageABC] = LinkageABC(
+    LEFT_ELBOW: ClassVar[Linkage] = Linkage(
         parent=seg.LEFT_ARM_PROXIMAL,
         children=[seg.LEFT_ARM_DISTAL],
         linked_keypoint=[kp.LEFT_ELBOW]
     )
 
     # Left wrist linkage
-    LEFT_WRIST: ClassVar[LinkageABC] = LinkageABC(
+    LEFT_WRIST: ClassVar[Linkage] = Linkage(
         parent=seg.LEFT_ARM_DISTAL,
         children=[
             seg.LEFT_PALM_THUMB,
@@ -131,21 +131,21 @@ class HumanLinkages(ABaseModel):
     )
 
     # Left hip linkage
-    LEFT_HIP: ClassVar[LinkageABC] = LinkageABC(
+    LEFT_HIP: ClassVar[Linkage] = Linkage(
         parent=seg.PELVIS_LEFT,
         children=[seg.LEFT_LEG_THIGH],
         linked_keypoint=[kp.PELVIS_LEFT_HIP_ACETABULUM]
     )
 
     # Left knee linkage
-    LEFT_KNEE: ClassVar[LinkageABC] = LinkageABC(
+    LEFT_KNEE: ClassVar[Linkage] = Linkage(
         parent=seg.LEFT_LEG_THIGH,
         children=[seg.LEFT_LEG_CALF],
         linked_keypoint=[kp.LEFT_KNEE]
     )
 
     # Left ankle linkage
-    LEFT_ANKLE: ClassVar[LinkageABC] = LinkageABC(
+    LEFT_ANKLE: ClassVar[Linkage] = Linkage(
         parent=seg.LEFT_LEG_CALF,
         children=[
             seg.LEFT_FOOT_HEEL,
@@ -155,10 +155,10 @@ class HumanLinkages(ABaseModel):
     )
 
     @classmethod
-    def get_all_linkages(cls) -> dict[str, LinkageABC]:
+    def get_all_linkages(cls) -> dict[str, Linkage]:
         """Get all linkages as a dictionary."""
         return {
             name: getattr(cls, name)
             for name in dir(cls)
-            if not name.startswith("_") and isinstance(getattr(cls, name), LinkageABC)
+            if not name.startswith("_") and isinstance(getattr(cls, name), Linkage)
         }

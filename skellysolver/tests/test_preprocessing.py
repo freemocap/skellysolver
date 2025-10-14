@@ -4,7 +4,6 @@ Tests preprocessing functions.
 """
 
 import numpy as np
-import pytest
 
 from skellysolver.data.data_models import Trajectory3D, TrajectoryDataset
 from skellysolver.data.preprocessing import (

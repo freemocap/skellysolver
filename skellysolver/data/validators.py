@@ -7,10 +7,11 @@ Validates trajectory data and checks for common issues:
 - Temporal gaps
 """
 
-import numpy as np
 from typing import Any
 
-from .data_models import TrajectoryDataset, Trajectory3D, Observation2D
+import numpy as np
+
+from .data_models import TrajectoryDataset, Trajectory3D
 
 
 def validate_dataset(

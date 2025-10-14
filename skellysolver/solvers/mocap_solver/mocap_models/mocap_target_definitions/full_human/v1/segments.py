@@ -4,7 +4,7 @@ Refactored segments - using actual SegmentABC instances
 from typing import ClassVar
 
 from skellysolver.data.arbitrary_types_model import ABaseModel
-from skellysolver.solvers.mocap_solver.mocap_models.abstract_base_classes.segments_abc import (
+from skellysolver.data.primitive_objects.segment_model import (
     SimpleSegmentABC,
     CompoundSegmentABC
 )

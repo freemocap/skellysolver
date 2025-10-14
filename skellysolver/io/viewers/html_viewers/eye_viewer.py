@@ -5,10 +5,10 @@ Generates interactive HTML viewer for eye tracking results showing:
 - 2D image projection with observed and reprojected points
 """
 
-import pandas as pd
-import numpy as np
 import json
 from pathlib import Path
+
+import pandas as pd
 
 from .base_viewer import BaseViewerGenerator
 

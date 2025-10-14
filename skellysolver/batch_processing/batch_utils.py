@@ -6,10 +6,8 @@ Helper functions for:
 - Dataset organization
 """
 
-import numpy as np
 from pathlib import Path
 from typing import Any, Callable
-from copy import deepcopy
 
 from skellysolver.batch_processing.batch_config import BatchConfig, BatchJobConfig, ParameterSweepConfig
 from skellysolver.solvers import PipelineConfig

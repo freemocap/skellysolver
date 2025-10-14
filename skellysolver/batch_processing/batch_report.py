@@ -7,12 +7,13 @@ Generates comprehensive reports from batch processing results:
 - HTML reports
 """
 
-import numpy as np
-import pandas as pd
 from pathlib import Path
 from typing import Any
 
-from .batch_processor  import BatchResult, BatchJobResult
+import numpy as np
+import pandas as pd
+
+from .batch_processor import BatchResult
 
 
 class BatchReportGenerator:

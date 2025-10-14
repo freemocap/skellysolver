@@ -3,12 +3,12 @@
 Configuration classes for processing multiple datasets in batch.
 """
 
-import numpy as np
 from pathlib import Path
 from typing import Any, Literal, get_origin, get_args
 
-from skellysolver.data.arbitrary_types_model import ABaseModel
 from pydantic import Field
+
+from skellysolver.data.arbitrary_types_model import ABaseModel
 from skellysolver.solvers import PipelineConfig
 
 

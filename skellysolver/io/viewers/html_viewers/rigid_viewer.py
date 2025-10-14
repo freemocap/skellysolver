@@ -3,9 +3,9 @@
 Generates interactive HTML viewer for rigid body tracking results.
 """
 
-import pandas as pd
 from pathlib import Path
-from typing import Any
+
+import pandas as pd
 
 from .base_viewer import BaseViewerGenerator
 

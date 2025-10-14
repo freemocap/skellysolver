@@ -39,25 +39,24 @@ Usage:
     result = pipeline.run()
 """
 
-# Base pipeline infrastructure
-from .base_solver import (
-    BasePipeline,
-    PipelineConfig,
-    PipelineRunner,
-)
-
-# Rigid body tracking
-from .mocap_solver import (
-    RigidBodyPipeline,
-    RigidBodyConfig,
-)
-
 # Eye tracking
 from skellysolver.solvers.eye_solver.eye_pipeline import (
     EyeTrackingPipeline,
     EyeTrackingConfig,
     CameraIntrinsics,
 )
+# Base pipeline infrastructure
+from .base_solver import (
+    BasePipeline,
+    PipelineConfig,
+    PipelineRunner,
+)
+# Rigid body tracking
+from .mocap_solver import (
+    RigidBodyPipeline,
+    RigidBodyConfig,
+)
+
 __all__ = [
     # Base
     "BasePipeline",

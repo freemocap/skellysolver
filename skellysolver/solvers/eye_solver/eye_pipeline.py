@@ -2,24 +2,24 @@
 
 """
 
-import numpy as np
 import logging
 from dataclasses import dataclass
 
+import numpy as np
 from pydantic import Field, model_validator
 
-from skellysolver.solvers.eye_solver.eye_solver_weights import EyeTrackingWeightConfig
 from skellysolver.core import ChunkingConfig
-from skellysolver.cost_primatives import RotationSmoothnessCost, ScalarSmoothnessCost
-from skellysolver.solvers.eye_solver.eye_costs import PupilPointProjectionCost, TearDuctProjectionCost
-from skellysolver.core.optimization_result import EyeTrackingResult
-from skellysolver.solvers.pyceres_solver import PyceresOptimizer
 from skellysolver.core.chunking import optimize_chunked_parallel, optimize_chunked_sequential
+from skellysolver.core.optimization_result import EyeTrackingResult
+from skellysolver.cost_primatives import RotationSmoothnessCost, ScalarSmoothnessCost
 from skellysolver.data.data_models import TrajectoryDataset
-from skellysolver.io.loaders import load_trajectories
-from skellysolver.data.validators import validate_dataset
 from skellysolver.data.preprocessing import filter_by_confidence
+from skellysolver.data.validators import validate_dataset
+from skellysolver.io.loaders import load_trajectories
 from skellysolver.solvers import PipelineConfig, BasePipeline
+from skellysolver.solvers.eye_solver.eye_costs import PupilPointProjectionCost, TearDuctProjectionCost
+from skellysolver.solvers.eye_solver.eye_solver_weights import EyeTrackingWeightConfig
+from skellysolver.solvers.pyceres_solver import PyceresOptimizer
 
 logger = logging.getLogger(__name__)
 

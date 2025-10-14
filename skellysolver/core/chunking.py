@@ -10,12 +10,12 @@ import multiprocessing as mp
 import os
 import time
 from abc import ABC, abstractmethod
-
-from skellysolver.data.arbitrary_types_model import ABaseModel
 from typing import Callable, Any
 
 import numpy as np
 from scipy.spatial.transform import Rotation, Slerp
+
+from skellysolver.data.arbitrary_types_model import ABaseModel
 
 logger = logging.getLogger(__name__)
 

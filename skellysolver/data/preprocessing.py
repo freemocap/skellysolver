@@ -8,10 +8,11 @@ Common preprocessing operations:
 - Centering/scaling
 """
 
+from typing import Any
+
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
-from typing import Any
 
 from .data_models import TrajectoryDataset, Trajectory3D, Observation2D
 

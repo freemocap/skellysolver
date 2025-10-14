@@ -7,12 +7,12 @@ Handles:
 - Result aggregation
 """
 
-import numpy as np
-import time
 import logging
-from typing import Any
 import multiprocessing as mp
+import time
+from typing import Any
 
+import numpy as np
 from pydantic import Field
 
 from skellysolver.batch_processing.batch_config import BatchConfig, BatchJobConfig

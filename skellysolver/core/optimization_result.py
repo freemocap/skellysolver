@@ -8,11 +8,10 @@ Replaces:
 - eye_pyceres_bundle_adjustment.py::OptimizationResult
 """
 from abc import ABC, abstractmethod
+from typing import Any
 
 import numpy as np
 import pyceres
-from typing import Any
-
 from pydantic import model_validator, Field
 from typing_extensions import Self
 

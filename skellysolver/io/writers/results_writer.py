@@ -7,16 +7,16 @@ Consolidates result saving from:
 Provides single interface for saving optimization results.
 """
 
-import numpy as np
-import pandas as pd
 import json
+import shutil
 from pathlib import Path
 from typing import Any
-import shutil
+
+import numpy as np
 
 from skellysolver.core import RigidBodyResult, EyeTrackingResult, OptimizationResult
-from skellysolver.io.writers.writer_base import BaseWriter
 from skellysolver.io.writers.csv_writer import TrajectoryCSVWriter, EyeTrackingCSVWriter
+from skellysolver.io.writers.writer_base import BaseWriter
 
 
 class ResultsWriter(BaseWriter):

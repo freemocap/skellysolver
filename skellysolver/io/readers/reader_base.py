@@ -3,7 +3,6 @@
 Provides consistent interface for reading different file formats.
 All readers inherit from BaseReader and implement read() method.
 """
-import csv
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path

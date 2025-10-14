@@ -4,13 +4,15 @@ Provides consistent interface for writing different file formats.
 All writers inherit from BaseWriter and implement write() method.
 """
 
-import numpy as np
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from skellysolver.data.arbitrary_types_model import ABaseModel
+import numpy as np
 from pydantic import Field
+
+from skellysolver.data.arbitrary_types_model import ABaseModel
+
 
 class BaseWriter(ABaseModel, ABC):
     """Abstract base class for all data writers.

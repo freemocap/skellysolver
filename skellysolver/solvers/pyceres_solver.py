@@ -13,15 +13,16 @@ that handles:
 Used by ALL pipelines to eliminate duplicated optimization code.
 """
 
-import numpy as np
-import pyceres
-import time
 import logging
+import time
 from typing import Any
 
+import numpy as np
+import pyceres
+
 from skellysolver.core import OptimizationConfig
-from skellysolver.cost_primatives import get_quaternion_manifold
 from skellysolver.core.optimization_result import OptimizationResult
+from skellysolver.cost_primatives import get_quaternion_manifold
 from skellysolver.data.arbitrary_types_model import ABaseModel
 
 logger = logging.getLogger(__name__)

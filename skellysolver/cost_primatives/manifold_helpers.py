@@ -8,7 +8,6 @@ This module provides convenient wrappers around pyceres manifolds.
 
 import numpy as np
 import pyceres
-from typing import Any
 
 
 def get_quaternion_manifold() -> pyceres.QuaternionManifold:

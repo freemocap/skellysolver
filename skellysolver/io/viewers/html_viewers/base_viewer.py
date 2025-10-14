@@ -3,11 +3,11 @@
 Provides common functionality for all viewer generators.
 """
 
-import pandas as pd
-from pathlib import Path
-from abc import ABC, abstractmethod
-from typing import Any
 import shutil
+from abc import ABC, abstractmethod
+from pathlib import Path
+
+import pandas as pd
 
 from skellysolver.data.arbitrary_types_model import ABaseModel
 

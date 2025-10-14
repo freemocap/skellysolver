@@ -3,10 +3,10 @@
 Tests reading and writing various file formats.
 """
 
-import numpy as np
-import pytest
-from pathlib import Path
 import json
+from pathlib import Path
+
+import numpy as np
 
 from skellysolver.io import TidyCSVReader, WideCSVReader, DLCCSVReader
 from skellysolver.io.readers.reader_base import JSONReader, NPYReader

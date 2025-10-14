@@ -3,8 +3,9 @@
 Tests RigidBodyPipeline end-to-end.
 """
 
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 from skellysolver.core import OptimizationConfig, MocapWeightConfig
 from skellysolver.core.optimization_result import RigidBodyResult

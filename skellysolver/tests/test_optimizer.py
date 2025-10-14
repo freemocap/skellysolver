@@ -5,13 +5,13 @@ Tests the Optimizer wrapper and configuration classes.
 
 import numpy as np
 
-from skellysolver.solvers.eye_solver.eye_solver_weights import WeightConfig
 from skellysolver.core import OptimizationConfig, ChunkingConfig
 from skellysolver.core.optimization_result import OptimizationResult
-from skellysolver.solvers.pyceres_solver import PyceresOptimizer
 from skellysolver.cost_primatives import (
     RotationSmoothnessCost,
 )
+from skellysolver.solvers.eye_solver.eye_solver_weights import WeightConfig
+from skellysolver.solvers.pyceres_solver import PyceresOptimizer
 
 
 class TestOptimizationConfig:

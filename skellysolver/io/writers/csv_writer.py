@@ -6,10 +6,11 @@ Provides specialized writers for:
 - Eye tracking results
 """
 
-import numpy as np
-import pandas as pd
 from pathlib import Path
 from typing import Any
+
+import numpy as np
+import pandas as pd
 
 from skellysolver.io.writers.writer_base import CSVWriter
 

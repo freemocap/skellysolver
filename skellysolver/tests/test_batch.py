@@ -7,7 +7,8 @@ from pathlib import Path
 
 from skellysolver.batch_processing.batch_config import BatchConfig, BatchJobConfig, ParameterSweepConfig
 from skellysolver.batch_processing.batch_processor import BatchJobResult, BatchResult
-from skellysolver.batch_processing.batch_utils import create_parameter_sweep, estimate_batch_time, create_batch_from_files
+from skellysolver.batch_processing.batch_utils import create_parameter_sweep, estimate_batch_time, \
+    create_batch_from_files
 from skellysolver.core import OptimizationConfig
 from skellysolver.solvers import RigidBodyConfig
 from skellysolver.solvers.mocap_solver.mocap_topology import RigidBodyTopology

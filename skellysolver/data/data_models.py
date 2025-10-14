@@ -8,9 +8,9 @@ This module provides fundamental data structures used across all pipelines:
 These replace scattered data handling across multiple files.
 """
 
-import numpy as np
 from typing import Any
 
+import numpy as np
 from pydantic import model_validator, Field
 from typing_extensions import Self
 

@@ -3,7 +3,6 @@
 Shows how to use SkellySolver batch processing for common tasks.
 """
 
-import numpy as np
 from pathlib import Path
 
 from ...batch_processing.config import BatchConfig, BatchJobConfig
@@ -14,9 +13,9 @@ from ...batch_processing.utils import (
     create_parameter_sweep,
     create_batch_from_directory,
 )
-from ...solvers.rigid_body import RigidBodyConfig, RigidBodyPipeline
 from ...core import OptimizationConfig, MocapWeightConfig
 from ...core.topology import RigidBodyTopology
+from ...solvers.rigid_body import RigidBodyConfig, RigidBodyPipeline
 
 
 def example_1_process_multiple_files() -> None:
