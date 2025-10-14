@@ -11,8 +11,8 @@ Simple workflow:
 from pathlib import Path
 import logging
 
-from skellysolver.core import OptimizationConfig, EyeTrackingWeightConfig, ParallelConfig
-from skellysolver.pipelines import CameraIntrinsics, EyeTrackingConfig, EyeTrackingPipeline
+from skellysolver.core import OptimizationConfig, EyeTrackingWeightConfig, ChunkingConfig
+from skellysolver.solvers import CameraIntrinsics, EyeTrackingConfig, EyeTrackingPipeline
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s | %(message)s')
 logger = logging.getLogger(__name__)
@@ -114,7 +114,7 @@ def run_eye_tracking_sequential(*, input_csv: Path, output_dir: Path) -> None:
         base_semi_major_mm=2.0,
         base_semi_minor_mm=1.5,
         # Sequential chunking
-        parallel=ParallelConfig(
+        parallel=ChunkingConfig(
             enabled=False,  # Disable parallelism
             chunk_size=1000,
             overlap_size=100,
@@ -164,7 +164,7 @@ def run_eye_tracking_single_pass(*, input_csv: Path, output_dir: Path) -> None:
         base_semi_major_mm=2.0,
         base_semi_minor_mm=1.5,
         # No chunking - will force single-pass even for long recordings
-        parallel=ParallelConfig(
+        parallel=ChunkingConfig(
             enabled=False,
         )
     )

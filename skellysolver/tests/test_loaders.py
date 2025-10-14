@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from skellysolver.data.loaders import (
+from skellysolver.io.loaders import (
     load_trajectories,
     load_tidy_format,
     load_wide_format,
@@ -16,7 +16,7 @@ from skellysolver.data.loaders import (
     concatenate_datasets,
 )
 from skellysolver.io.formats import detect_csv_format
-from skellysolver.data.base_data import TrajectoryDataset, Trajectory3D
+from skellysolver.data.data_models import TrajectoryDataset, Trajectory3D
 
 
 class TestTidyFormatLoader:

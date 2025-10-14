@@ -62,7 +62,7 @@ Copy all files maintaining the directory structure shown above. Total: 45 files,
 
 ```python
 from pathlib import Path
-from skellysolver.pipelines.rigid_body import (
+from skellysolver.solvers.rigid_body import (
     RigidBodyPipeline,
     RigidBodyConfig,
 )
@@ -92,10 +92,11 @@ result = pipeline.run()
 ### Batch Processing
 
 ```python
-from skellysolver.batch import (
+from skellysolver.batch_processing import (
     create_batch_from_directory,
     BatchProcessor,
 )
+
 
 def make_config(filepath: Path) -> RigidBodyConfig:
     return RigidBodyConfig(
@@ -104,6 +105,7 @@ def make_config(filepath: Path) -> RigidBodyConfig:
         topology=topology,
         optimization=OptimizationConfig(max_iterations=300),
     )
+
 
 batch_config = create_batch_from_directory(
     directory=Path("data/"),
@@ -119,7 +121,7 @@ result = processor.run()
 ### Parameter Optimization
 
 ```python
-from skellysolver.batch import create_parameter_sweep
+from skellysolver.batch_processing import create_parameter_sweep
 
 parameter_grid = {
     "weights.lambda_rigid": [100.0, 500.0, 1000.0],
@@ -186,9 +188,9 @@ All cost functions inherit from `BaseCostFunction` and accept a `weight` paramet
 Wrapper around pyceres for problem setup and solving.
 
 ```python
-from skellysolver.core import Optimizer, OptimizationConfig
+from skellysolver.core import PyceresOptimizer, OptimizationConfig
 
-optimizer = Optimizer(config=OptimizationConfig())
+optimizer = PyceresOptimizer(config=OptimizationConfig())
 
 # Add parameters
 optimizer.add_parameter_block(
@@ -294,25 +296,25 @@ All pipelines inherit from `BasePipeline` and implement these methods:
 ### RigidBodyPipeline
 
 ```python
-from skellysolver.pipelines.rigid_body import (
+from skellysolver.solvers.rigid_body import (
     RigidBodyPipeline,
     RigidBodyConfig,
 )
-from skellysolver.core import RigidBodyWeightConfig
+from skellysolver.core import MocapWeightConfig
 
 config = RigidBodyConfig(
     input_path=Path("data.csv"),
     output_dir=Path("output/"),
     topology=topology,
     optimization=OptimizationConfig(),
-    weights=RigidBodyWeightConfig(
+    weights=MocapWeightConfig(
         lambda_data=100.0,
         lambda_rigid=500.0,
         lambda_rot_smooth=200.0,
         lambda_trans_smooth=200.0,
     ),
     soft_edges: list[tuple[int, int]] | None = None,
-    lambda_soft: float = 10.0,
+lambda_soft: float = 10.0,
 )
 
 pipeline = RigidBodyPipeline(config=config)
@@ -322,7 +324,7 @@ result = pipeline.run()
 ### EyeTrackingPipeline
 
 ```python
-from skellysolver.pipelines.eye_tracking import (
+from skellysolver.solvers.eye_tracking import (
     EyeTrackingPipeline,
     EyeTrackingConfig,
     CameraIntrinsics,
@@ -351,14 +353,14 @@ result = pipeline.run()
 ### BatchConfig
 
 ```python
-from skellysolver.batch import BatchConfig, BatchJobConfig
+from skellysolver.batch_processing import BatchConfig, BatchJobConfig
 
 job = BatchJobConfig(
     job_id="job_001",
     job_name="Dataset 1",
     pipeline_config=pipeline_config,
     priority: int = 0,
-    metadata: dict[str, Any] | None = None,
+metadata: dict[str, Any] | None = None,
 )
 
 batch_config = BatchConfig(
@@ -367,14 +369,14 @@ batch_config = BatchConfig(
     output_root=Path("output/"),
     parallel_mode="auto",  # "sequential", "parallel", or "auto"
     max_workers: int | None = None,
-    continue_on_error: bool = False,
+continue_on_error: bool = False,
 )
 ```
 
 ### Batch Creation Utilities
 
 ```python
-from skellysolver.batch import (
+from skellysolver.batch_processing import (
     create_batch_from_files,
     create_batch_from_directory,
     create_parameter_sweep,
@@ -416,7 +418,7 @@ batch_config = create_cross_validation_batch(
 ### BatchProcessor
 
 ```python
-from skellysolver.batch import BatchProcessor
+from skellysolver.batch_processing import BatchProcessor
 
 processor = BatchProcessor(config=batch_config)
 result = processor.run()
@@ -434,7 +436,7 @@ for job_result in result.job_results:
 ### Report Generation
 
 ```python
-from skellysolver.batch import BatchReportGenerator
+from skellysolver.batch_processing import BatchReportGenerator
 
 report_gen = BatchReportGenerator(batch_result=result)
 
@@ -450,7 +452,7 @@ report_gen.save_html_report(filepath=Path("report.html"))
 ### Finding Best Parameters
 
 ```python
-from skellysolver.batch import find_best_parameters
+from skellysolver.batch_processing import find_best_parameters
 
 best_params = find_best_parameters(
     batch_result=result,
@@ -538,8 +540,9 @@ result = run_ferret_skull_solver(trajectory_dict, ...)
 ```
 
 **After:**
+
 ```python
-from skellysolver.pipelines.rigid_body import RigidBodyPipeline, RigidBodyConfig
+from skellysolver.solvers.rigid_body import RigidBodyPipeline, RigidBodyConfig
 
 config = RigidBodyConfig(input_path=csv_path, ...)
 pipeline = RigidBodyPipeline(config=config)
@@ -558,8 +561,9 @@ result = run_eye_tracking(data, ...)
 ```
 
 **After:**
+
 ```python
-from skellysolver.pipelines.eye_tracking import EyeTrackingPipeline, EyeTrackingConfig
+from skellysolver.solvers.eye_tracking import EyeTrackingPipeline, EyeTrackingConfig
 
 config = EyeTrackingConfig(input_path=csv_path, ...)
 pipeline = EyeTrackingPipeline(config=config)

@@ -6,7 +6,7 @@ Tests preprocessing functions.
 import numpy as np
 import pytest
 
-from skellysolver.data.base_data import Trajectory3D, TrajectoryDataset
+from skellysolver.data.data_models import Trajectory3D, TrajectoryDataset
 from skellysolver.data.preprocessing import (
     interpolate_missing,
     filter_by_confidence,

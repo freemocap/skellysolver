@@ -9,10 +9,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 import shutil
 
-from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
+from skellysolver.data.arbitrary_types_model import ABaseModel
 
 
-class BaseViewerGenerator(ArbitraryTypesModel,ABC):
+class BaseViewerGenerator(ABaseModel, ABC):
     """Abstract base class for viewer generators.
     
     All viewers inherit from this and implement:

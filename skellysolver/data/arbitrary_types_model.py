@@ -1,7 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 
 
-class ArbitraryTypesModel(BaseModel):
+class ABaseModel(BaseModel):
     """Model with arbitrary types allowed."""
-
     model_config = ConfigDict(arbitrary_types_allowed= True)

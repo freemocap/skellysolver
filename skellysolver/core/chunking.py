@@ -7,8 +7,11 @@ and blend the results smoothly using SLERP for rotations.
 
 import logging
 import multiprocessing as mp
+import os
 import time
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
+
+from skellysolver.data.arbitrary_types_model import ABaseModel
 from typing import Callable, Any
 
 import numpy as np
@@ -17,8 +20,8 @@ from scipy.spatial.transform import Rotation, Slerp
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ChunkInfo:
+
+class ChunkInfo(ABaseModel):
     """Information about a single chunk.
 
     Attributes:
@@ -40,9 +43,9 @@ class ChunkInfo:
         return self.global_end - self.global_start
 
 
-@dataclass
-class ChunkResult:
-    """Result from optimizing a single chunk.
+
+class ChunkResult(ABaseModel, ABC):
+    """Result from optimizing a single chunk, abc class - need instance for each Solver.
 
     Attributes:
         chunk_info: Information about the chunk
@@ -54,12 +57,15 @@ class ChunkResult:
         success: Whether optimization succeeded
     """
     chunk_info: ChunkInfo
-    rotations: np.ndarray
-    translations: np.ndarray
-    reconstructed: np.ndarray
-    reference_geometry: np.ndarray
+    # add chunk data appropriate for each Solver subclass
     computation_time: float
     success: bool
+
+    @abstractmethod
+    @classmethod
+    def from_solver_result(cls, chunk_info: ChunkInfo, result: Any, computation_time: float) -> "ChunkResult":
+        """Create ChunkResult from solver-specific result object."""
+        pass
 
 
 def split_into_chunks(
@@ -218,6 +224,7 @@ def blend_translations(
 def optimize_chunk_sequential(
         *,
         chunk_info: ChunkInfo,
+        chunk_result_model: type[ChunkResult],
         raw_data: np.ndarray,
         optimize_fn: Callable,
         **optimize_kwargs: Any
@@ -226,6 +233,7 @@ def optimize_chunk_sequential(
 
     Args:
         chunk_info: Information about this chunk
+        chunk_result_model: ChunkResult subclass to use for results
         raw_data: (n_total_frames, n_markers, 3) full dataset
         optimize_fn: Optimization function to call
         **optimize_kwargs: Additional arguments for optimize_fn
@@ -248,19 +256,16 @@ def optimize_chunk_sequential(
 
     computation_time = time.time() - start_time
 
-    return ChunkResult(
+    return chunk_result_model.from_solver_result(
         chunk_info=chunk_info,
-        rotations=result.rotations,
-        translations=result.translations,
-        reconstructed=result.reconstructed,
-        reference_geometry=result.reference_geometry,
-        computation_time=computation_time,
-        success=result.success
+        result=result,
+        computation_time=computation_time
     )
 
 
 def optimize_chunk_parallel_worker(
         chunk_info: ChunkInfo,
+        chunk_result_model: type[ChunkResult],
         chunk_data: np.ndarray,
         optimize_fn: Callable,
         optimize_kwargs: dict[str, Any]
@@ -273,6 +278,7 @@ def optimize_chunk_parallel_worker(
 
     Args:
         chunk_info: Information about this chunk
+        chunk_result_model: ChunkResult subclass to use for results
         chunk_data: (n_chunk_frames, n_markers, 3) data for this chunk
         optimize_fn: Optimization function
         optimize_kwargs: Arguments for optimize_fn
@@ -293,20 +299,17 @@ def optimize_chunk_parallel_worker(
     # Multiprocessing will capture the exception and re-raise it in the main process
     result = optimize_fn(data=chunk_data, **optimize_kwargs)
 
-    return ChunkResult(
+    return chunk_result_model.from_solver_result(
         chunk_info=chunk_info,
-        rotations=result.rotations,
-        translations=result.translations,
-        reconstructed=result.reconstructed,
-        reference_geometry=result.reference_geometry,
-        computation_time=time.time() - start_time,
-        success=result.success
+        result=result,
+        computation_time=time.time() - start_time
     )
 
 
 def optimize_chunked_parallel(
         *,
         raw_data: np.ndarray,
+        chunk_result_model: type[ChunkResult],
         chunk_size: int,
         overlap_size: int,
         blend_window: int,
@@ -314,11 +317,12 @@ def optimize_chunked_parallel(
         n_workers: int | None,
         optimize_fn: Callable,
         **optimize_kwargs: Any
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> ChunkResult:
     """Optimize using parallel chunked processing.
 
     Args:
         raw_data: (n_frames, n_markers, 3) full dataset
+        chunk_result_model: ChunkResult subclass to use for results
         chunk_size: Frames per chunk
         overlap_size: Overlapping frames between chunks
         blend_window: Size of blending window
@@ -328,7 +332,7 @@ def optimize_chunked_parallel(
         **optimize_kwargs: Additional arguments for optimize_fn
 
     Returns:
-        Tuple of (rotations, translations, reconstructed)
+        ChunkResult with full optimized data
 
     Raises:
         RuntimeError: If any chunk fails to optimize (with detailed context)
@@ -415,7 +419,11 @@ def optimize_chunked_parallel(
     total_time = time.time() - start_time
 
     # Sort by chunk_id
-    chunk_results = sorted(chunk_results_unsorted, key=lambda x: x.chunk_info.chunk_id)
+    chunk_results = [chunk_result_model.from_solver_result(
+        chunk_info=result.chunk_info,
+        result=result,
+        computation_time=result.computation_time
+    ) for result in  sorted(chunk_results_unsorted, key=lambda x: x.chunk_info.chunk_id)]
 
     # NO check for success=False - errors crash immediately now!
     # If we reached here, all chunks succeeded (or would have crashed)
@@ -619,3 +627,52 @@ def stitch_chunk_results(
     logger.info(f"\nStitching complete: {n_frames} frames")
 
     return all_rotations, all_translations, all_reconstructed
+
+
+class ChunkingConfig(ABaseModel):
+    """Configuration for parallel chunked optimization.
+
+    Used when processing long recordings that need to be split
+    into chunks and processed in parallel.
+
+    Attributes:
+        enabled: Whether to use parallel processing
+        chunk_size: Number of frames per chunk
+        overlap_size: Number of overlapping frames between chunks
+        blend_window: Size of blending window in overlap region
+        min_chunk_size: Minimum frames to process as separate chunk
+        num_workers: Number of parallel workers (None = auto-detect)
+    """
+
+    enabled: bool = True
+    chunk_size: int = 500
+    overlap_size: int = 50
+    blend_window: int = 25
+    min_chunk_size: int = 100
+    num_workers: int | None = None
+
+    def get_num_workers(self) -> int:
+        """Get number of workers.
+
+        Returns:
+            Number of workers to use
+        """
+        if self.num_workers is None:
+            cpu_count = os.cpu_count()
+            return cpu_count if cpu_count else 1
+        return self.num_workers
+
+    def should_use_parallel(self, *, n_frames: int) -> bool:
+        """Determine if parallel processing should be used.
+
+        Args:
+            n_frames: Total number of frames
+
+        Returns:
+            True if should use parallel processing
+        """
+        if not self.enabled:
+            return False
+
+        # Only use parallel if we have enough frames
+        return n_frames > (self.chunk_size + self.min_chunk_size)

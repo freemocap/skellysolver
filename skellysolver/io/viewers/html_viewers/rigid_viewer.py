@@ -10,7 +10,7 @@ from typing import Any
 from .base_viewer import BaseViewerGenerator
 
 
-class RigidBodyViewerGenerator(BaseViewerGenerator):
+class MocapViewerGenerator(BaseViewerGenerator):
     """Generate interactive HTML viewer for rigid body tracking.
 
     Creates viewer that displays:

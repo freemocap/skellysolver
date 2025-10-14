@@ -49,7 +49,7 @@ class MeasurementFactorBA(pyceres.CostFunction):
         measured_point: np.ndarray,
         marker_idx: int,
         n_markers: int,
-        weight: float = 100.0
+        weight: float
     ) -> None:
         super().__init__()
         self.measured_point = measured_point.copy()
@@ -115,7 +115,7 @@ class RigidBodyFactorBA(pyceres.CostFunction):
         marker_j: int,
         n_markers: int,
         target_distance: float,
-        weight: float = 100.0
+        weight: float
     ) -> None:
         super().__init__()
         self.marker_i = marker_i

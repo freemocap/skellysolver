@@ -4,16 +4,13 @@ Tests all cost functions in skellysolver.core.cost_functions.
 """
 
 import numpy as np
-import pytest
-from scipy.spatial.transform import Rotation
 
-from skellysolver.core.cost_primatives import (
+from skellysolver.cost_primatives import (
     RotationSmoothnessCost,
     TranslationSmoothnessCost,
     ScalarSmoothnessCost,
     Point3DMeasurementCost,
     RigidEdgeCost,
-    SoftEdgeCost,
     ReferenceAnchorCost,
 )
 
@@ -296,18 +293,10 @@ class TestCostFunctionIntegration:
     
     def test_all_costs_importable(self) -> None:
         """All cost functions should be importable."""
-        from skellysolver.core.cost_primatives import (
-            BaseCostFunction,
+        from skellysolver.cost_primatives import (
             RotationSmoothnessCost,
             TranslationSmoothnessCost,
             ScalarSmoothnessCost,
-            Point3DMeasurementCost,
-            Point2DProjectionCost,
-            RigidPoint3DMeasurementBundleAdjustment,
-            SimpleDistanceCost,
-            RigidEdgeCost,
-            SoftEdgeCost,
-            ReferenceAnchorCost,
         )
         
         # All should be classes

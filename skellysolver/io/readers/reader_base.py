@@ -11,10 +11,10 @@ from typing import Any
 
 import numpy as np
 
-from skellysolver.data.arbitrary_types_model import ArbitraryTypesModel
+from skellysolver.data.arbitrary_types_model import ABaseModel
 
 
-class BaseReader(ArbitraryTypesModel,ABC):
+class BaseReader(ABaseModel, ABC):
     """Abstract base class for all data readers.
     
     Provides standard interface for reading files.

@@ -5,9 +5,9 @@ import numpy as np
 import logging
 from scipy.spatial.transform import Rotation
 
-from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig
-from skellysolver.pipelines import RigidBodyConfig, RigidBodyPipeline
-from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
+from skellysolver.core import OptimizationConfig, MocapWeightConfig
+from skellysolver.solvers import RigidBodyConfig, RigidBodyPipeline
+from skellysolver.solvers.mocap_solver.mocap_topology import RigidBodyTopology
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +248,7 @@ def run_synthetic_demo() -> None:
             robust_loss_type="huber",
             robust_loss_param=2.0,
         ),
-        weights=RigidBodyWeightConfig(
+        weights=MocapWeightConfig(
             lambda_data=100.0,
             lambda_rigid=1000.0,
             lambda_rot_smooth=500.0,

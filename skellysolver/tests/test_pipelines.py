@@ -6,10 +6,10 @@ Tests RigidBodyPipeline end-to-end.
 import numpy as np
 from pathlib import Path
 
-from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig
-from skellysolver.core.result import RigidBodyResult
-from skellysolver.pipelines import RigidBodyConfig, RigidBodyPipeline
-from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
+from skellysolver.core import OptimizationConfig, MocapWeightConfig
+from skellysolver.core.optimization_result import RigidBodyResult
+from skellysolver.solvers import RigidBodyConfig, RigidBodyPipeline
+from skellysolver.solvers.mocap_solver.mocap_topology import RigidBodyTopology
 
 
 class TestRigidBodyPipeline:
@@ -160,7 +160,7 @@ class TestRigidBodyConfig:
         )
         
         assert config.weights is not None
-        assert isinstance(config.weights, RigidBodyWeightConfig)
+        assert isinstance(config.weights, MocapWeightConfig)
     
     def test_custom_weights(self, temp_dir: Path) -> None:
         """Should use custom weights if provided."""
@@ -169,7 +169,7 @@ class TestRigidBodyConfig:
             rigid_edges=[(0, 1)],
         )
         
-        custom_weights = RigidBodyWeightConfig(
+        custom_weights = MocapWeightConfig(
             lambda_data=50.0,
             lambda_rigid=1000.0
         )

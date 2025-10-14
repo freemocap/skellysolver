@@ -13,7 +13,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 from typing import Any
 
-from .base_data import TrajectoryDataset, Trajectory3D, Observation2D
+from .data_models import TrajectoryDataset, Trajectory3D, Observation2D
 
 
 def interpolate_missing(

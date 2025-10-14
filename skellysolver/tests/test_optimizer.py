@@ -4,14 +4,13 @@ Tests the Optimizer wrapper and configuration classes.
 """
 
 import numpy as np
-import pytest
 
-from skellysolver.core.config import OptimizationConfig, ParallelConfig, WeightConfig
-from skellysolver.core.result import OptimizationResult
-from skellysolver.core.optimizer import Optimizer
-from skellysolver.core.cost_primatives import (
+from skellysolver.solvers.eye_solver.eye_solver_weights import WeightConfig
+from skellysolver.core import OptimizationConfig, ChunkingConfig
+from skellysolver.core.optimization_result import OptimizationResult
+from skellysolver.solvers.pyceres_solver import PyceresOptimizer
+from skellysolver.cost_primatives import (
     RotationSmoothnessCost,
-    TranslationSmoothnessCost,
 )
 
 
@@ -66,7 +65,7 @@ class TestParallelConfig:
     
     def test_create_default_config(self) -> None:
         """Should create config with defaults."""
-        config = ParallelConfig()
+        config = ChunkingConfig()
         
         assert config.enabled is True
         assert config.chunk_size == 500
@@ -74,7 +73,7 @@ class TestParallelConfig:
     
     def test_should_use_parallel(self) -> None:
         """Should correctly determine if parallel is needed."""
-        config = ParallelConfig(enabled=True, chunk_size=100, min_chunk_size=50)
+        config = ChunkingConfig(enabled=True, chunk_size=100, min_chunk_size=50)
         
         # Small dataset - no parallel
         assert not config.should_use_parallel(n_frames=120)
@@ -84,7 +83,7 @@ class TestParallelConfig:
     
     def test_get_num_workers(self) -> None:
         """Should get number of workers."""
-        config = ParallelConfig()
+        config = ChunkingConfig()
         n_workers = config.get_num_workers()
         
         assert n_workers >= 1
@@ -96,7 +95,7 @@ class TestOptimizer:
     def test_create_optimizer(self) -> None:
         """Should create optimizer instance."""
         config = OptimizationConfig(max_iterations=10)
-        optimizer = Optimizer(config=config)
+        optimizer = PyceresOptimizer(config=config)
         
         assert optimizer.config == config
         assert optimizer.num_parameters() == 0
@@ -104,7 +103,7 @@ class TestOptimizer:
     def test_add_parameter_block(self) -> None:
         """Should add parameter block."""
         config = OptimizationConfig()
-        optimizer = Optimizer(config=config)
+        optimizer = PyceresOptimizer(config=config)
         
         params = np.array([1.0, 2.0, 3.0])
         optimizer.add_parameter_block(name="test", parameters=params)
@@ -115,7 +114,7 @@ class TestOptimizer:
     def test_add_quaternion_parameter(self) -> None:
         """Should add quaternion with manifold."""
         config = OptimizationConfig()
-        optimizer = Optimizer(config=config)
+        optimizer = PyceresOptimizer(config=config)
         
         quat = np.array([1.0, 0.0, 0.0, 0.0])
         optimizer.add_quaternion_parameter(name="rotation", parameters=quat)
@@ -125,7 +124,7 @@ class TestOptimizer:
     def test_add_residual_block(self) -> None:
         """Should add residual block."""
         config = OptimizationConfig()
-        optimizer = Optimizer(config=config)
+        optimizer = PyceresOptimizer(config=config)
         
         # Add parameters
         quat_1 = np.array([1.0, 0.0, 0.0, 0.0])
@@ -143,7 +142,7 @@ class TestOptimizer:
     def test_simple_optimization(self) -> None:
         """Should solve simple optimization problem."""
         config = OptimizationConfig(max_iterations=50)
-        optimizer = Optimizer(config=config)
+        optimizer = PyceresOptimizer(config=config)
         
         # Create parameters that should converge
         quat_1 = np.array([1.0, 0.0, 0.0, 0.0])
@@ -166,7 +165,7 @@ class TestOptimizer:
     def test_set_parameter_bounds(self) -> None:
         """Should set parameter bounds."""
         config = OptimizationConfig()
-        optimizer = Optimizer(config=config)
+        optimizer = PyceresOptimizer(config=config)
         
         params = np.array([1.0])
         optimizer.add_parameter_block(name="scale", parameters=params)

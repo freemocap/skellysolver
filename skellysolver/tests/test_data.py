@@ -6,7 +6,7 @@ Tests Trajectory3D, Observation2D, and TrajectoryDataset.
 import numpy as np
 import pytest
 
-from skellysolver.data.base_data import Trajectory3D, Observation2D, TrajectoryDataset
+from skellysolver.data.data_models import Trajectory3D, Observation2D, TrajectoryDataset
 
 
 class TestTrajectory3D:

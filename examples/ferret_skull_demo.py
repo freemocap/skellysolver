@@ -15,9 +15,9 @@ NO manual edge list management!
 from pathlib import Path
 import logging
 
-from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig, ParallelConfig
-from skellysolver.pipelines.rigid_body_pipeline import RigidBodyConfig, RigidBodyPipeline
-from skellysolver.pipelines.rigid_body_pipeline.rigid_body_topology import RigidBodyTopology
+from skellysolver.core import OptimizationConfig, MocapWeightConfig, ChunkingConfig
+from skellysolver.solvers.mocap_solver import RigidBodyConfig, RigidBodyPipeline
+from skellysolver.solvers.mocap_solver.mocap_topology import RigidBodyTopology
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s | %(message)s')
 logger = logging.getLogger(__name__)
@@ -83,13 +83,13 @@ def run_ferret_tracking(*, input_csv: Path, output_dir: Path) -> None:
             robust_loss_type="huber",
             robust_loss_param=2.0,
         ),
-        weights=RigidBodyWeightConfig(
+        weights=MocapWeightConfig(
             lambda_data=100.0,
             lambda_rigid=1000.0,
             lambda_rot_smooth=500.0,
             lambda_trans_smooth=500.0,
         ),
-        parallel=ParallelConfig()  # Auto-decides based on data size
+        parallel=ChunkingConfig()  # Auto-decides based on data size
     )
 
     # Run pipeline - handles everything automatically

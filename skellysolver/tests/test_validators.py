@@ -6,7 +6,7 @@ Tests validation functions.
 import numpy as np
 import pytest
 
-from skellysolver.data.base_data import Trajectory3D, TrajectoryDataset
+from skellysolver.data.data_models import Trajectory3D, TrajectoryDataset
 from skellysolver.data.validators import (
     validate_dataset,
     check_required_markers,
