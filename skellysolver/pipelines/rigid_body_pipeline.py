@@ -1,37 +1,36 @@
-"""Rigid body tracking pipeline with chunking support.
+"""Rigid body tracking pipeline with chunking support and passthrough markers.
 
 Optimizes rigid body pose from noisy marker measurements.
 Supports both single-pass and chunked parallel optimization for long recordings.
+NEW: Supports passthrough markers that bypass optimization and are included raw.
 """
-import shutil
-import numpy as np
 import logging
-from pathlib import Path
-from dataclasses import dataclass
 
+import numpy as np
 from pydantic import model_validator, Field
+from scipy.spatial.transform import Rotation
 
-from skellysolver.io.viewers.templates.template_helpers import get_template_path, get_output_path
-from skellysolver.pipelines.topology import RigidBodyTopology
-from skellysolver.pipelines.metrics import evaluate_reconstruction
-from skellysolver.pipelines.savers import save_topology_json, save_trajectory_csv, save_evaluation_report
+from skellysolver.core.chunking import optimize_chunked_parallel, optimize_chunked_sequential
 from skellysolver.core.config import RigidBodyWeightConfig, ParallelConfig
 from skellysolver.core.cost_functions import RigidPoint3DMeasurementBundleAdjustment, RigidEdgeCost, SoftEdgeCost, \
-    RotationSmoothnessCost, TranslationSmoothnessCost, ReferenceAnchorCost
-from skellysolver.core.result import RigidBodyResult
+    RotationSmoothnessCost, TranslationSmoothnessCost
 from skellysolver.core.optimizer import Optimizer
-from skellysolver.core.chunking import optimize_chunked_parallel, optimize_chunked_sequential
+from skellysolver.core.result import RigidBodyResult
 from skellysolver.data.base_data import TrajectoryDataset
 from skellysolver.data.loaders import load_trajectories
-from skellysolver.data.validators import (
-    validate_dataset,
-    validate_topology_compatibility,
-)
 from skellysolver.data.preprocessing import (
     filter_by_confidence,
     interpolate_missing,
 )
+from skellysolver.data.validators import (
+    validate_dataset,
+    validate_topology_compatibility,
+)
 from skellysolver.pipelines import PipelineConfig, BasePipeline
+from skellysolver.pipelines.metrics import evaluate_reconstruction
+from skellysolver.io.writers.csv_writer import TidyCSVWriter
+from skellysolver.pipelines.savers import save_topology_json, save_evaluation_report
+from skellysolver.pipelines.topology import RigidBodyTopology
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +49,16 @@ class RigidBodyConfig(PipelineConfig):
         interpolate_missing: Whether to interpolate missing data
         use_bundle_adjustment: Joint optimization of pose + geometry
         parallel: Optional parallel processing configuration
+        passthrough_markers: Optional list of marker names to include in output
+                           without optimization (passed through raw from input).
+                           These markers must exist in the input data but not
+                           be part of the topology.
     """
 
+
     topology: RigidBodyTopology
+    scale_factor: float = 1.0
+    z_value: float = 0.0
     weights: RigidBodyWeightConfig | None = None
     soft_edges: list[tuple[int, int]] | None = None
     soft_distances: np.ndarray | None = None
@@ -60,6 +66,7 @@ class RigidBodyConfig(PipelineConfig):
     interpolate_missing_data: bool = True
     use_bundle_adjustment: bool = True
     parallel: ParallelConfig | None = Field(default_factory=ParallelConfig)
+    passthrough_markers: list[str] | None = None
 
     @model_validator(mode='after')
     def set_defaults_and_validate(self) -> 'RigidBodyConfig':
@@ -76,15 +83,27 @@ class RigidBodyConfig(PipelineConfig):
         if self.parallel is None:
             self.parallel = ParallelConfig()
 
+        # Validate passthrough markers don't overlap with topology
+        if self.passthrough_markers is not None:
+            overlap = set(self.passthrough_markers) & set(self.topology.marker_names)
+            if overlap:
+                raise ValueError(
+                    f"Passthrough markers cannot overlap with topology markers: {overlap}"
+                )
+
         return self
 
 
 class RigidBodyPipeline(BasePipeline):
-    """Rigid body tracking pipeline with chunking support.
+    """Rigid body tracking pipeline with chunking support and passthrough markers.
 
     Optimizes rigid body pose from noisy marker measurements.
     Uses bundle adjustment to jointly optimize reference geometry and poses.
     Supports chunked parallel optimization for long recordings.
+
+    NEW: Supports passthrough markers - markers that are included in the output
+    without optimization. Useful for combining optimized rigid bodies (e.g., skull)
+    with raw flexible markers (e.g., spine).
 
     Usage:
         from skellysolver.pipelines.rigid_body import (
@@ -94,18 +113,19 @@ class RigidBodyPipeline(BasePipeline):
         from skellysolver.core import OptimizationConfig, RigidBodyWeightConfig, ParallelConfig
         from skellysolver.core.topology import RigidBodyTopology
 
-        # Define topology
+        # Define topology (only rigid markers)
         topology = RigidBodyTopology(
             marker_names=["nose", "left_eye", "right_eye"],
             rigid_edges=[(0, 1), (1, 2), (2, 0)],
-            name="simple_triangle"
+            name="skull"
         )
 
-        # Configure with parallel processing
+        # Configure with passthrough markers (flexible markers)
         config = RigidBodyConfig(
             input_path=Path("data.csv"),
             output_dir=Path("output/"),
             topology=topology,
+            passthrough_markers=["spine_t1", "sacrum", "tail_tip"],  # Raw markers
             optimization=OptimizationConfig(max_iterations=300),
             parallel=ParallelConfig(
                 enabled=True,
@@ -115,12 +135,13 @@ class RigidBodyPipeline(BasePipeline):
             )
         )
 
-        # Run
+        # Run - output includes optimized skull + raw spine
         pipeline = RigidBodyPipeline(config=config)
         result = pipeline.run()
     """
 
-    config: RigidBodyConfig  # Type hint for IDE
+    config: RigidBodyConfig
+    _passthrough_data: np.ndarray | None = None
 
     def load_data(self) -> TrajectoryDataset:
         """Load trajectory data from CSV.
@@ -132,8 +153,8 @@ class RigidBodyPipeline(BasePipeline):
 
         dataset = load_trajectories(
             filepath=self.config.input_path,
-            scale_factor=1.0,
-            z_value=0.0
+            scale_factor=self.config.scale_factor,
+            z_value=self.config.z_value
         )
 
         logger.info(f"  Loaded {dataset.n_markers} markers × {dataset.n_frames} frames")
@@ -149,6 +170,7 @@ class RigidBodyPipeline(BasePipeline):
         2. Validate data quality
         3. Filter low-confidence frames (optional)
         4. Interpolate missing data (optional)
+        5. Store passthrough markers if specified
 
         Args:
             data: Raw loaded data
@@ -172,19 +194,34 @@ class RigidBodyPipeline(BasePipeline):
 
         logger.info("    ✓ All required markers present")
 
+        # Check passthrough markers exist
+        if self.config.passthrough_markers:
+            logger.info("  Checking passthrough markers...")
+            missing_passthrough = set(self.config.passthrough_markers) - set(data.marker_names)
+            if missing_passthrough:
+                raise ValueError(
+                    f"Passthrough markers not in dataset: {missing_passthrough}"
+                )
+            logger.info(f"    ✓ All {len(self.config.passthrough_markers)} passthrough markers present")
+
         # Validate data
         logger.info("  Validating data...")
+        all_required_markers = self.config.topology.marker_names
+        if self.config.passthrough_markers:
+            all_required_markers = all_required_markers + self.config.passthrough_markers
+
         report = validate_dataset(
             dataset=data,
-            required_markers=self.config.topology.marker_names,
+            required_markers=all_required_markers,
             min_valid_frames=10,
             min_confidence=self.config.min_confidence
         )
 
         if not report["valid"]:
-            logger.warning("    ⚠ Data validation warnings:")
+            logger.error("    ⚠ Data validation warnings:")
             for error in report["errors"]:
-                logger.warning(f"      {error}")
+                logger.error(f"      {error}")
+            raise ValueError("Data validation failed")
         else:
             logger.info("    ✓ Data validation passed")
 
@@ -210,29 +247,40 @@ class RigidBodyPipeline(BasePipeline):
             )
             logger.info("    ✓ Interpolation complete")
 
+        # Store passthrough markers if specified
+        if self.config.passthrough_markers:
+            logger.info(f"  Storing {len(self.config.passthrough_markers)} passthrough markers (raw)...")
+            self._passthrough_data = data.to_array(marker_names=self.config.passthrough_markers)
+            logger.info(f"    Shape: {self._passthrough_data.shape}")
+        else:
+            self._passthrough_data = None
+
         logger.info("✓ Preprocessing complete")
 
         return data
 
     def optimize(self, *, data: TrajectoryDataset) -> RigidBodyResult:
-        """Run rigid body optimization with optional chunking.
+        """Run rigid body optimization with optional chunking and passthrough.
 
         Automatically selects between single-pass and chunked optimization
         based on data size and parallel configuration.
+
+        If passthrough markers are configured, combines optimized topology markers
+        with raw passthrough markers in the final result.
 
         Args:
             data: Preprocessed data
 
         Returns:
-            RigidBodyResult with optimized parameters
+            RigidBodyResult with optimized parameters (and passthrough if configured)
         """
         logger.info("Running optimization...")
 
         # Extract data as array
-        noisy_data = data.to_array(marker_names=self.config.topology.marker_names)
-        n_frames, n_markers, _ = noisy_data.shape
+        raw_data = data.to_array(marker_names=self.config.topology.marker_names)
+        n_frames, n_markers, _ = raw_data.shape
 
-        logger.info(f"  Data shape: {noisy_data.shape}")
+        logger.info(f"  Data shape: {raw_data.shape}")
 
         # Check if we should use chunked optimization
         use_chunking = (
@@ -241,9 +289,63 @@ class RigidBodyPipeline(BasePipeline):
         )
 
         if use_chunking:
-            return self._optimize_chunked(data=noisy_data)
+            result = self._optimize_chunked(data=raw_data)
         else:
-            return self._optimize_single_pass(data=noisy_data)
+            result = self._optimize_single_pass(data=raw_data)
+
+        # Combine with passthrough if needed
+        if self._passthrough_data is not None:
+            logger.info("  Combining optimized + passthrough markers...")
+            result = self._combine_with_passthrough(result=result)
+            logger.info(f"    Final shape: {result.reconstructed.shape}")
+
+        return result
+
+    def _combine_with_passthrough(self, *, result: RigidBodyResult) -> RigidBodyResult:
+        """Combine optimized topology markers with raw passthrough markers.
+
+        Creates a new result with:
+        - reconstructed: [optimized_topology | raw_passthrough]
+        - Updated metadata with passthrough info
+
+        Args:
+            result: Optimization result with topology markers only
+
+        Returns:
+            New result with combined markers
+        """
+        # Validate shapes match
+        if result.reconstructed.shape[0] != self._passthrough_data.shape[0]:
+            raise ValueError(
+                f"Frame count mismatch: optimized={result.reconstructed.shape[0]}, "
+                f"passthrough={self._passthrough_data.shape[0]}"
+            )
+
+        # Concatenate along marker axis
+        combined_reconstructed = np.concatenate(
+            [result.reconstructed, self._passthrough_data],
+            axis=1
+        )
+
+        # Update metadata
+        new_metadata = result.metadata.copy()
+        new_metadata["passthrough_markers"] = self.config.passthrough_markers
+        new_metadata["n_topology_markers"] = len(self.config.topology.marker_names)
+        new_metadata["n_passthrough_markers"] = len(self.config.passthrough_markers)
+        new_metadata["n_markers"] = combined_reconstructed.shape[1]
+
+        return RigidBodyResult(
+            success=result.success,
+            num_iterations=result.num_iterations,
+            initial_cost=result.initial_cost,
+            final_cost=result.final_cost,
+            solve_time_seconds=result.solve_time_seconds,
+            reconstructed=combined_reconstructed,
+            rotations=result.rotations,
+            translations=result.translations,
+            reference_geometry=result.reference_geometry,
+            metadata=new_metadata
+        )
 
     def _optimize_single_pass(self, *, data: np.ndarray) -> RigidBodyResult:
         """Run standard single-pass optimization.
@@ -335,7 +437,7 @@ class RigidBodyPipeline(BasePipeline):
                 marker_i=i,
                 marker_j=j,
                 n_markers=n_markers,
-                target_distance=reference_distances[i, j],
+                target_distance=float(reference_distances[i, j]),
                 weight=self.config.weights.lambda_rigid
             )
             optimizer.add_residual_block(
@@ -352,7 +454,7 @@ class RigidBodyPipeline(BasePipeline):
                         measured_point=data[frame_idx, j],
                         marker_idx=i,
                         n_markers=n_markers,
-                        target_distance=soft_distances_dict[i, j],
+                        target_distance=float(soft_distances_dict[i, j]),
                         weight=self.config.weights.lambda_soft
                     )
                     optimizer.add_residual_block(
@@ -377,16 +479,16 @@ class RigidBodyPipeline(BasePipeline):
                 parameters=[translations[i], translations[i + 1]]
             )
 
-        # Add reference anchor
-        logger.info("  Adding reference anchor...")
-        anchor_cost = ReferenceAnchorCost(
-            initial_reference=reference_params.copy(),
-            weight=self.config.weights.lambda_anchor
-        )
-        optimizer.add_residual_block(
-            cost=anchor_cost,
-            parameters=[reference_params]
-        )
+        # # Add reference anchor
+        # logger.info("  Adding reference anchor...")
+        # anchor_cost = ReferenceAnchorCost(
+        #     initial_reference=reference_params.copy(),
+        #     weight=self.config.weights.lambda_anchor
+        # )
+        # optimizer.add_residual_block(
+        #     cost=anchor_cost,
+        #     parameters=[reference_params]
+        # )
 
         logger.info(f"  Total parameters: {optimizer.num_parameters()}")
         logger.info(f"  Total residuals:  {optimizer.num_residuals()}")
@@ -400,7 +502,6 @@ class RigidBodyPipeline(BasePipeline):
         optimized_reference = reference_params.reshape(n_markers, 3)
 
         # Compute rotations and reconstructed positions
-        from scipy.spatial.transform import Rotation
 
         rotations = np.zeros((n_frames, 3, 3))
         reconstructed = np.zeros((n_frames, n_markers, 3))
@@ -464,7 +565,7 @@ class RigidBodyPipeline(BasePipeline):
         # Choose chunking mode
         if self.config.parallel.enabled:
             rotations, translations, reconstructed = optimize_chunked_parallel(
-                noisy_data=data,
+                raw_data=data,
                 chunk_size=self.config.parallel.chunk_size,
                 overlap_size=self.config.parallel.overlap_size,
                 blend_window=self.config.parallel.blend_window,
@@ -474,7 +575,7 @@ class RigidBodyPipeline(BasePipeline):
             )
         else:
             rotations, translations, reconstructed = optimize_chunked_sequential(
-                noisy_data=data,
+                raw_data=data,
                 chunk_size=self.config.parallel.chunk_size,
                 overlap_size=self.config.parallel.overlap_size,
                 blend_window=self.config.parallel.blend_window,
@@ -525,19 +626,29 @@ class RigidBodyPipeline(BasePipeline):
         """
         logger.info("Evaluating results...")
 
-        # Get noisy data
-        noisy_data = self.data.to_array(marker_names=self.config.topology.marker_names)
+        # Get marker names (topology only, not passthrough)
+        topology_marker_names = self.config.topology.marker_names
+
+        # Get noisy data for topology markers
+        raw_data = self.data.to_array(marker_names=topology_marker_names)
+
+        # Extract only topology markers from result if passthrough is present
+        if self._passthrough_data is not None:
+            n_topology = len(topology_marker_names)
+            optimized_data = result.reconstructed[:, :n_topology, :]
+        else:
+            optimized_data = result.reconstructed
 
         # Compute reference distances
         reference_distances = self._estimate_edge_distances(
-            data=noisy_data,
+            data=raw_data,
             edges=self.config.topology.rigid_edges
         )
 
         # Evaluate reconstruction
         metrics = evaluate_reconstruction(
-            noisy_data=noisy_data,
-            optimized_data=result.reconstructed,
+            raw_data=raw_data,
+            optimized_data=optimized_data,
             reference_distances=reference_distances,
             topology=self.config.topology,
             ground_truth_data=None
@@ -560,7 +671,8 @@ class RigidBodyPipeline(BasePipeline):
         """Save results to disk.
 
         Saves:
-        - trajectory_data.csv: Noisy and optimized trajectories
+        - trajectory_data.csv: Optimized trajectories (tidy format)
+        - raw_trajectory_data.csv: Raw/noisy trajectories (tidy format)
         - topology.json: Topology metadata
         - metrics.json: Evaluation metrics
         - reference_geometry.npy: Optimized reference shape
@@ -571,24 +683,56 @@ class RigidBodyPipeline(BasePipeline):
         """
         logger.info("Saving results...")
 
-        # Get noisy data
-        noisy_data = self.data.to_array(marker_names=self.config.topology.marker_names)
+        # Determine all marker names (topology + passthrough)
+        marker_names = self.config.topology.marker_names
+        if self.config.passthrough_markers:
+            marker_names = marker_names + self.config.passthrough_markers
 
-        # Save trajectory CSV
-        save_trajectory_csv(
+        # Get noisy data for all markers
+        raw_data = self.data.to_array(marker_names=marker_names)
+
+        # Save optimized trajectory CSV (unadorned name)
+        tidy_writer = TidyCSVWriter()
+        tidy_writer.write(
             filepath=self.config.output_dir / "trajectory_data.csv",
-            noisy_data=noisy_data,
-            optimized_data=result.reconstructed,
-            marker_names=self.config.topology.marker_names,
-            ground_truth_data=None
+            data={
+                "positions": result.reconstructed,
+                "marker_names": marker_names
+            }
         )
         logger.info("  ✓ Saved trajectory_data.csv")
 
-        # Save topology JSON
+        # Save raw trajectory CSV (labeled as raw)
+        tidy_writer.write(
+            filepath=self.config.output_dir / "raw_trajectory_data.csv",
+            data={
+                "positions": raw_data,
+                "marker_names": marker_names
+            }
+        )
+        logger.info("  ✓ Saved raw_trajectory_data.csv")
+
+        # Save topology JSON (with display edges if passthrough markers exist)
+        topology_dict = self.config.topology.to_dict()
+
+        # If we have passthrough markers, add display edges connecting them
+        if self.config.passthrough_markers:
+            # Get the indices where passthrough markers start
+            n_topology = len(self.config.topology.marker_names)
+
+            # You may want to customize this - for now, just chain passthrough markers
+            display_edges = list(self.config.topology.rigid_edges)
+
+            # Chain passthrough markers together
+            for i in range(len(self.config.passthrough_markers) - 1):
+                display_edges.append((n_topology + i, n_topology + i + 1))
+
+            topology_dict["display_edges"] = display_edges
+
         save_topology_json(
             filepath=self.config.output_dir / "topology.json",
-            topology_dict=self.config.topology.to_dict(),
-            marker_names=self.config.topology.marker_names,
+            topology_dict=topology_dict,
+            marker_names=marker_names,
             n_frames=result.n_frames,
             has_ground_truth=False,
             soft_edges=self.config.soft_edges
@@ -603,6 +747,9 @@ class RigidBodyPipeline(BasePipeline):
                 "topology": self.config.topology.name,
                 "n_frames": result.n_frames,
                 "n_markers": result.n_markers,
+                "n_topology_markers": len(self.config.topology.marker_names),
+                "n_passthrough_markers": len(self.config.passthrough_markers) if self.config.passthrough_markers else 0,
+                "passthrough_markers": self.config.passthrough_markers,
                 "optimization": {
                     "mode": result.metadata.get("optimization_mode", "unknown"),
                     "max_iterations": self.config.optimization.max_iterations,
@@ -622,7 +769,7 @@ class RigidBodyPipeline(BasePipeline):
         )
         logger.info("  ✓ Saved metrics.json")
 
-        # Save reference geometry
+        # Save reference geometry (topology markers only)
         np.save(
             file=self.config.output_dir / "reference_geometry.npy",
             arr=result.reference_geometry
@@ -642,7 +789,7 @@ class RigidBodyPipeline(BasePipeline):
         logger.info("Generating viewer...")
 
         # Import the viewer generator
-        from skellysolver.io.viewers.rigid_viewer import RigidBodyViewerGenerator
+        from skellysolver.io.viewers.html_viewers.rigid_viewer import RigidBodyViewerGenerator
 
         # Create generator instance
         viewer_generator = RigidBodyViewerGenerator()
@@ -651,6 +798,7 @@ class RigidBodyPipeline(BasePipeline):
         viewer_path = viewer_generator.generate(
             output_dir=self.config.output_dir,
             data_csv_path=self.config.output_dir / "trajectory_data.csv",
+            raw_csv_path=self.config.output_dir / "raw_trajectory_data.csv",
             topology_json_path=self.config.output_dir / "topology.json",
             video_path=None
         )

@@ -32,22 +32,22 @@ class TrajectoryCSVWriter(CSVWriter):
         Args:
             filepath: Path to output CSV
             data: Dictionary with:
-                - noisy_data: (n_frames, n_markers, 3) noisy positions
+                - raw_data: (n_frames, n_markers, 3) noisy positions
                 - optimized_data: (n_frames, n_markers, 3) optimized positions
                 - marker_names: list of marker names
                 - ground_truth_data: optional (n_frames, n_markers, 3) ground truth
         """
         self.validate_data(
             data=data,
-            required_keys=["noisy_data", "optimized_data", "marker_names"]
+            required_keys=["raw_data", "optimized_data", "marker_names"]
         )
         
-        noisy_data = data["noisy_data"]
+        raw_data = data["raw_data"]
         optimized_data = data["optimized_data"]
         marker_names = data["marker_names"]
         ground_truth_data = data.get("ground_truth_data")
         
-        n_frames, n_markers, _ = noisy_data.shape
+        n_frames, n_markers, _ = raw_data.shape
         
         # Build DataFrame
         df_data = {"frame": np.arange(n_frames)}
@@ -55,31 +55,31 @@ class TrajectoryCSVWriter(CSVWriter):
         # Add noisy data
         for idx, marker_name in enumerate(marker_names):
             for coord_idx, coord_name in enumerate(["x", "y", "z"]):
-                df_data[f"noisy_{marker_name}_{coord_name}"] = noisy_data[:, idx, coord_idx]
+                df_data[f"noisy_{marker_name}.{coord_name}"] = raw_data[:, idx, coord_idx]
         
         # Add optimized data
         for idx, marker_name in enumerate(marker_names):
             for coord_idx, coord_name in enumerate(["x", "y", "z"]):
-                df_data[f"optimized_{marker_name}_{coord_name}"] = optimized_data[:, idx, coord_idx]
+                df_data[f"optimized_{marker_name}.{coord_name}"] = optimized_data[:, idx, coord_idx]
         
         # Add ground truth if provided
         if ground_truth_data is not None:
             for idx, marker_name in enumerate(marker_names):
                 for coord_idx, coord_name in enumerate(["x", "y", "z"]):
-                    df_data[f"gt_{marker_name}_{coord_name}"] = ground_truth_data[:, idx, coord_idx]
+                    df_data[f"gt_{marker_name}.{coord_name}"] = ground_truth_data[:, idx, coord_idx]
         
         # Add centroids
-        noisy_center = np.mean(noisy_data, axis=1)
+        noisy_center = np.mean(raw_data, axis=1)
         optimized_center = np.mean(optimized_data, axis=1)
         
         for coord_idx, coord_name in enumerate(["x", "y", "z"]):
-            df_data[f"noisy_center_{coord_name}"] = noisy_center[:, coord_idx]
-            df_data[f"optimized_center_{coord_name}"] = optimized_center[:, coord_idx]
+            df_data[f"noisy_center.{coord_name}"] = noisy_center[:, coord_idx]
+            df_data[f"optimized_center.{coord_name}"] = optimized_center[:, coord_idx]
         
         if ground_truth_data is not None:
             gt_center = np.mean(ground_truth_data, axis=1)
             for coord_idx, coord_name in enumerate(["x", "y", "z"]):
-                df_data[f"gt_center_{coord_name}"] = gt_center[:, coord_idx]
+                df_data[f"gt_center.{coord_name}"] = gt_center[:, coord_idx]
         
         # Write
         self.ensure_directory(filepath=filepath)
@@ -87,7 +87,6 @@ class TrajectoryCSVWriter(CSVWriter):
         df = pd.DataFrame(data=df_data)
         df.to_csv(path_or_buf=filepath, index=False)
         
-        self.last_write_path = filepath
 
 
 class SimpleTrajectoryCSVWriter(CSVWriter):
@@ -128,7 +127,7 @@ class SimpleTrajectoryCSVWriter(CSVWriter):
         
         for idx, marker_name in enumerate(marker_names):
             for coord_idx, coord_name in enumerate(["x", "y", "z"]):
-                df_data[f"{marker_name}_{coord_name}"] = positions[:, idx, coord_idx]
+                df_data[f"{marker_name}.{coord_name}"] = positions[:, idx, coord_idx]
         
         # Write
         self.ensure_directory(filepath=filepath)
@@ -136,7 +135,7 @@ class SimpleTrajectoryCSVWriter(CSVWriter):
         df = pd.DataFrame(data=df_data)
         df.to_csv(path_or_buf=filepath, index=False)
         
-        self.last_write_path = filepath
+
 
 
 class EyeTrackingCSVWriter(CSVWriter):
@@ -177,9 +176,9 @@ class EyeTrackingCSVWriter(CSVWriter):
         # Build DataFrame
         df_data = {
             "frame": frame_indices,
-            "gaze_x": gaze_directions[:, 0],
-            "gaze_y": gaze_directions[:, 1],
-            "gaze_z": gaze_directions[:, 2],
+            "gaze.x": gaze_directions[:, 0],
+            "gaze.y": gaze_directions[:, 1],
+            "gaze.z": gaze_directions[:, 2],
             "gaze_azimuth_rad": azimuth,
             "gaze_elevation_rad": elevation,
             "gaze_azimuth_deg": np.rad2deg(azimuth),
@@ -209,7 +208,7 @@ class EyeTrackingCSVWriter(CSVWriter):
         df = pd.DataFrame(data=df_data)
         df.to_csv(path_or_buf=filepath, index=False)
         
-        self.last_write_path = filepath
+
 
 
 class TidyCSVWriter(CSVWriter):
@@ -267,4 +266,4 @@ class TidyCSVWriter(CSVWriter):
             fieldnames=["frame", "keypoint", "x", "y", "z"]
         )
         
-        self.last_write_path = filepath
+

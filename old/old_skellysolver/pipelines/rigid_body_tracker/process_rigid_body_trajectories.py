@@ -58,7 +58,7 @@ class TrackingConfig:
 
 def estimate_initial_distances(
     *,
-    noisy_data: np.ndarray,
+    raw_data: np.ndarray,
     edges: list[tuple[int, int]],
     edge_type: str = "rigid"
 ) -> np.ndarray:
@@ -66,21 +66,21 @@ def estimate_initial_distances(
     Estimate initial edge distances from noisy data using median.
 
     Args:
-        noisy_data: (n_frames, n_markers, 3)
+        raw_data: (n_frames, n_markers, 3)
         edges: List of (i, j) pairs
         edge_type: "rigid" or "soft" (for logging)
 
     Returns:
         (n_markers, n_markers) distance matrix
     """
-    n_markers = noisy_data.shape[1]
+    n_markers = raw_data.shape[1]
     distances = np.zeros((n_markers, n_markers))
 
     logger.info(f"Estimating {edge_type} edge distances from data...")
 
     for i, j in edges:
         frame_distances = np.linalg.norm(
-            noisy_data[:, i, :] - noisy_data[:, j, :],
+            raw_data[:, i, :] - raw_data[:, j, :],
             axis=1
         )
         median_dist = np.median(frame_distances)
@@ -143,9 +143,9 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
     logger.info("STEP 2: EXTRACT MARKERS")
     logger.info("="*80)
 
-    noisy_data = config.topology.extract_trajectories(trajectory_dict=trajectory_dict)
-    n_frames = noisy_data.shape[0]
-    logger.info(f"  Data shape: {noisy_data.shape}")
+    raw_data = config.topology.extract_trajectories(trajectory_dict=trajectory_dict)
+    n_frames = raw_data.shape[0]
+    logger.info(f"  Data shape: {raw_data.shape}")
 
     # =========================================================================
     # STEP 3: ESTIMATE INITIAL DISTANCES
@@ -156,7 +156,7 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
 
     # RIGID edges: should maintain exact distances
     reference_distances = estimate_initial_distances(
-        noisy_data=noisy_data,
+        raw_data=raw_data,
         edges=config.topology.rigid_edges,
         edge_type="rigid"
     )
@@ -165,7 +165,7 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
     soft_distances = None
     if config.soft_edges:
         soft_distances = estimate_initial_distances(
-            noisy_data=noisy_data,
+            raw_data=raw_data,
             edges=config.soft_edges,
             edge_type="soft"
         )
@@ -208,7 +208,7 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
 
     if use_chunking and config.use_parallel:
         rotations, translations, reconstructed = optimize_chunked_parallel(
-            noisy_data=noisy_data,
+            raw_data=raw_data,
             rigid_edges=config.topology.rigid_edges,
             reference_distances=reference_distances,
             optimization_config=config.optimization,
@@ -234,7 +234,7 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
         )
     else:
         result = optimize_rigid_body(
-            noisy_data=noisy_data,
+            raw_data=raw_data,
             rigid_edges=config.topology.rigid_edges,
             reference_distances=reference_distances,
             config=config.optimization,
@@ -251,7 +251,7 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
     logger.info("="*80)
 
     metrics = evaluate_reconstruction(
-        noisy_data=noisy_data,
+        raw_data=raw_data,
         optimized_data=result.reconstructed,
         reference_distances=reference_distances,
         topology=config.topology,
@@ -269,7 +269,7 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
 
     save_results(
         output_dir=config.output_dir,
-        noisy_data=noisy_data,
+        raw_data=raw_data,
         optimized_data=result.reconstructed,
         marker_names=config.topology.marker_names,
         topology_dict=config.topology.to_dict(),

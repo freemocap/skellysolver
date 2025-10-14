@@ -33,8 +33,7 @@ class BaseWriter(ArbitraryTypesModel,ABC):
         writer.write(filepath=Path("output.txt"), data={"key": "value"})
     """
     
-    last_write_path: Path | None = None
-    
+
     @abstractmethod
     def write(
         self,
@@ -113,7 +112,6 @@ class CSVWriter(BaseWriter):
             writer.writeheader()
             writer.writerows(rows)
         
-        self.last_write_path = filepath
 
 
 class JSONWriter(BaseWriter):

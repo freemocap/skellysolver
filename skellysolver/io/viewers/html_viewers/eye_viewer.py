@@ -5,10 +5,9 @@ Generates interactive HTML viewer for eye tracking results.
 
 import pandas as pd
 from pathlib import Path
-from typing import Any
 
 from .base_viewer import BaseViewerGenerator
-from skellysolver.io.viewers.rigid_viewer import RigidBodyViewerGenerator
+from skellysolver.io.viewers.html_viewers.rigid_viewer import RigidBodyViewerGenerator
 
 
 class EyeTrackingViewerGenerator(BaseViewerGenerator):

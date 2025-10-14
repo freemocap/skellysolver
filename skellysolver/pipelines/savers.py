@@ -44,7 +44,7 @@ def save_simple_csv(
 def save_trajectory_csv(
     *,
     filepath: Path,
-    noisy_data: np.ndarray,
+    raw_data: np.ndarray,
     optimized_data: np.ndarray,
     marker_names: list[str],
     ground_truth_data: np.ndarray | None = None
@@ -53,23 +53,23 @@ def save_trajectory_csv(
     Save trajectory data for visualization.
 
     Creates CSV with columns:
-        frame, noisy_{marker}_x/y/z, optimized_{marker}_x/y/z, [gt_{marker}_x/y/z]
+        frame, raw_{marker}.x/y/z, optimized_{marker}_x/y/z, [gt_{marker}_x/y/z]
 
     Args:
         filepath: Output CSV path
-        noisy_data: (n_frames, n_markers, 3) noisy measurements
+        raw_data: (n_frames, n_markers, 3) noisy measurements
         optimized_data: (n_frames, n_markers, 3) optimized trajectory
         marker_names: List of marker names
         ground_truth_data: Optional (n_frames, n_markers, 3) ground truth
     """
-    n_frames, n_markers, _ = noisy_data.shape
+    n_frames, n_markers, _ = raw_data.shape
 
     data: dict[str, np.ndarray | range] = {"frame": range(n_frames)}
 
     # Add noisy data
     for idx, marker_name in enumerate(marker_names):
         for coord_idx, coord_name in enumerate(["x", "y", "z"]):
-            data[f"noisy_{marker_name}_{coord_name}"] = noisy_data[:, idx, coord_idx]
+            data[f"noisy_{marker_name}_{coord_name}"] = raw_data[:, idx, coord_idx]
 
     # Add optimized data
     for idx, marker_name in enumerate(marker_names):
@@ -83,7 +83,7 @@ def save_trajectory_csv(
                 data[f"gt_{marker_name}_{coord_name}"] = ground_truth_data[:, idx, coord_idx]
 
     # Add centroids
-    noisy_center = np.mean(noisy_data, axis=1)
+    noisy_center = np.mean(raw_data, axis=1)
     optimized_center = np.mean(optimized_data, axis=1)
 
     for coord_idx, coord_name in enumerate(["x", "y", "z"]):
@@ -144,7 +144,7 @@ def save_topology_json(
 def save_results(
     *,
     output_dir: Path,
-    noisy_data: np.ndarray,
+    raw_data: np.ndarray,
     optimized_data: np.ndarray,
     marker_names: list[str],
     topology_dict: dict[str, object],
@@ -164,7 +164,7 @@ def save_results(
 
     Args:
         output_dir: Directory to save results
-        noisy_data: (n_frames, n_markers, 3)
+        raw_data: (n_frames, n_markers, 3)
         optimized_data: (n_frames, n_markers, 3)
         marker_names: List of marker names
         topology_dict: Topology dictionary
@@ -175,12 +175,12 @@ def save_results(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    n_frames = noisy_data.shape[0]
+    n_frames = raw_data.shape[0]
 
     # Save trajectory data
     save_trajectory_csv(
         filepath=output_dir / "trajectory_data.csv",
-        noisy_data=noisy_data,
+        raw_data=raw_data,
         optimized_data=optimized_data,
         marker_names=marker_names,
         ground_truth_data=ground_truth_data
@@ -251,7 +251,7 @@ def save_evaluation_report(
 
 def print_summary(
     *,
-    noisy_data: np.ndarray,
+    raw_data: np.ndarray,
     optimized_data: np.ndarray,
     ground_truth_data: np.ndarray | None = None
 ) -> None:
@@ -259,7 +259,7 @@ def print_summary(
     Print summary statistics to console.
 
     Args:
-        noisy_data: (n_frames, n_markers, 3)
+        raw_data: (n_frames, n_markers, 3)
         optimized_data: (n_frames, n_markers, 3)
         ground_truth_data: Optional ground truth
     """
@@ -268,7 +268,7 @@ def print_summary(
     logger.info("="*80)
 
     if ground_truth_data is not None:
-        noisy_errors = np.linalg.norm(noisy_data - ground_truth_data, axis=2)
+        noisy_errors = np.linalg.norm(raw_data - ground_truth_data, axis=2)
         opt_errors = np.linalg.norm(optimized_data - ground_truth_data, axis=2)
 
         logger.info("\nReconstruction accuracy (vs ground truth):")
@@ -279,11 +279,11 @@ def print_summary(
         logger.info(f"  Improvement: {improvement:.1f}%")
 
     # Compute edge length consistency
-    n_frames, n_markers, _ = noisy_data.shape
+    n_frames, n_markers, _ = raw_data.shape
 
     if n_markers >= 2:
         # Check first edge as example
-        noisy_dists = np.linalg.norm(noisy_data[:, 0, :] - noisy_data[:, 1, :], axis=1)
+        noisy_dists = np.linalg.norm(raw_data[:, 0, :] - raw_data[:, 1, :], axis=1)
         opt_dists = np.linalg.norm(optimized_data[:, 0, :] - optimized_data[:, 1, :], axis=1)
 
         logger.info(f"\nEdge length consistency (marker 0-1):")

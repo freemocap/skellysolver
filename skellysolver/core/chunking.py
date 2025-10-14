@@ -218,7 +218,7 @@ def blend_translations(
 def optimize_chunk_sequential(
         *,
         chunk_info: ChunkInfo,
-        noisy_data: np.ndarray,
+        raw_data: np.ndarray,
         optimize_fn: Callable,
         **optimize_kwargs: Any
 ) -> ChunkResult:
@@ -226,7 +226,7 @@ def optimize_chunk_sequential(
 
     Args:
         chunk_info: Information about this chunk
-        noisy_data: (n_total_frames, n_markers, 3) full dataset
+        raw_data: (n_total_frames, n_markers, 3) full dataset
         optimize_fn: Optimization function to call
         **optimize_kwargs: Additional arguments for optimize_fn
 
@@ -236,7 +236,7 @@ def optimize_chunk_sequential(
     start_time = time.time()
 
     # Extract chunk data
-    chunk_data = noisy_data[chunk_info.global_start:chunk_info.global_end]
+    chunk_data = raw_data[chunk_info.global_start:chunk_info.global_end]
 
     logger.info(f"  Optimizing chunk {chunk_info.chunk_id}: frames {chunk_info.global_start}-{chunk_info.global_end}")
 
@@ -330,7 +330,7 @@ def optimize_chunk_parallel_worker(
 
 def optimize_chunked_parallel(
         *,
-        noisy_data: np.ndarray,
+        raw_data: np.ndarray,
         chunk_size: int,
         overlap_size: int,
         blend_window: int,
@@ -342,7 +342,7 @@ def optimize_chunked_parallel(
     """Optimize using parallel chunked processing.
 
     Args:
-        noisy_data: (n_frames, n_markers, 3) full dataset
+        raw_data: (n_frames, n_markers, 3) full dataset
         chunk_size: Frames per chunk
         overlap_size: Overlapping frames between chunks
         blend_window: Size of blending window
@@ -354,7 +354,7 @@ def optimize_chunked_parallel(
     Returns:
         Tuple of (rotations, translations, reconstructed)
     """
-    n_frames, n_markers, _ = noisy_data.shape
+    n_frames, n_markers, _ = raw_data.shape
 
     if n_workers is None:
         n_workers = max(mp.cpu_count() - 1, 1)
@@ -384,7 +384,7 @@ def optimize_chunked_parallel(
     # Prepare tasks for parallel processing
     tasks = []
     for chunk in chunks:
-        chunk_data = noisy_data[chunk.global_start:chunk.global_end]
+        chunk_data = raw_data[chunk.global_start:chunk.global_end]
         tasks.append((
             chunk,
             chunk_data,
@@ -434,7 +434,7 @@ def optimize_chunked_parallel(
 
 def optimize_chunked_sequential(
         *,
-        noisy_data: np.ndarray,
+        raw_data: np.ndarray,
         chunk_size: int,
         overlap_size: int,
         blend_window: int,
@@ -445,7 +445,7 @@ def optimize_chunked_sequential(
     """Optimize using sequential chunked processing.
 
     Args:
-        noisy_data: (n_frames, n_markers, 3) full dataset
+        raw_data: (n_frames, n_markers, 3) full dataset
         chunk_size: Frames per chunk
         overlap_size: Overlapping frames between chunks
         blend_window: Size of blending window
@@ -456,7 +456,7 @@ def optimize_chunked_sequential(
     Returns:
         Tuple of (rotations, translations, reconstructed)
     """
-    n_frames, n_markers, _ = noisy_data.shape
+    n_frames, n_markers, _ = raw_data.shape
 
     logger.info("=" * 80)
     logger.info("SEQUENTIAL CHUNKED OPTIMIZATION")
@@ -488,7 +488,7 @@ def optimize_chunked_sequential(
     for chunk in chunks:
         result = optimize_chunk_sequential(
             chunk_info=chunk,
-            noisy_data=noisy_data,
+            raw_data=raw_data,
             optimize_fn=optimize_fn,
             **optimize_kwargs
         )

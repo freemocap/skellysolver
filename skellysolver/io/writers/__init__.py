@@ -12,7 +12,7 @@ Usage:
     writer = ResultsWriter(output_dir=Path("output/"))
     writer.save_rigid_body_results(
         result=result,
-        noisy_data=noisy_data,
+        raw_data=raw_data,
         marker_names=marker_names,
         topology_dict=topology_dict,
         metrics=metrics

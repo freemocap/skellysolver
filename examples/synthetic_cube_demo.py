@@ -54,10 +54,9 @@ def generate_cube_markers(*, size: float = 1.0, n_extra: int = 3) -> np.ndarray:
 def generate_synthetic_trajectory(
         *,
         reference_markers: np.ndarray,
-        n_frames: int = 200,
-        noise_std: float = 0.1,
-        random_seed: int = 42
-) -> tuple[np.ndarray, np.ndarray]:
+        n_frames: int ,
+        noise_std: float,
+        random_seed: int ) -> tuple[np.ndarray, np.ndarray]:
     """
     Generate synthetic trajectory with circular motion.
 
@@ -212,13 +211,14 @@ def run_synthetic_demo() -> None:
     reference_markers = generate_cube_markers(size=1.0, n_extra=3)
     ground_truth, noisy = generate_synthetic_trajectory(
         reference_markers=reference_markers,
-        n_frames=2000,
+        n_frames=200,
         noise_std=0.1,
         random_seed=42
     )
 
     logger.info(f"  Generated {len(noisy)} frames")
-    logger.info(f"  Noise level: sigma=100mm")
+    logger.info(f"  Number of markers: {len(reference_markers)}")
+
 
     # Setup output directory
     output_dir = Path("output/synthetic_demo")
@@ -250,9 +250,9 @@ def run_synthetic_demo() -> None:
         ),
         weights=RigidBodyWeightConfig(
             lambda_data=100.0,
-            lambda_rigid=500.0,
-            lambda_rot_smooth=200.0,
-            lambda_trans_smooth=200.0,
+            lambda_rigid=1000.0,
+            lambda_rot_smooth=500.0,
+            lambda_trans_smooth=500.0,
         ),
     )
 
@@ -278,7 +278,7 @@ def run_synthetic_demo() -> None:
 
         # Save metrics
         import json
-        with open(output_dir / "demo_metrics.json", 'w') as f:
+        with open(output_dir / "reconstruction_vs_ground_truth_metrics.json", 'w') as f:
             json.dump(metrics, f, indent=2)
 
     logger.info("\n" + "=" * 80)

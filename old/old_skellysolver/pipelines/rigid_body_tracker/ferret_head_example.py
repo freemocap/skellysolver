@@ -247,7 +247,7 @@ def run_ferret_skull_solver() -> None:
     # Save results
     save_results(
         output_dir=config.output_dir,
-        noisy_data=noisy_all,
+        raw_data=noisy_all,
         optimized_data=combined_data,
         marker_names=combined_names,
         topology_dict=combined_topology,

@@ -63,11 +63,10 @@ class ResultsWriter(BaseWriter):
         self,
         *,
         result: RigidBodyResult,
-        noisy_data: np.ndarray,
+        raw_data: np.ndarray,
         marker_names: list[str],
         topology_dict: dict[str, Any],
         metrics: dict[str, Any],
-        ground_truth_data: np.ndarray | None = None,
         copy_viewer: bool = True,
         viewer_template_path: Path | None = None
     ) -> None:
@@ -82,11 +81,10 @@ class ResultsWriter(BaseWriter):
 
         Args:
             result: Optimization result
-            noisy_data: (n_frames, n_markers, 3) noisy measurements
+            raw_data: (n_frames, n_markers, 3) noisy measurements
             marker_names: List of marker names
             topology_dict: Topology dictionary
             metrics: Evaluation metrics
-            ground_truth_data: Optional ground truth
             copy_viewer: Whether to copy HTML viewer
             viewer_template_path: Path to viewer template
         """
@@ -99,10 +97,9 @@ class ResultsWriter(BaseWriter):
         traj_writer.write(
             filepath=self.output_dir / "trajectory_data.csv",
             data={
-                "noisy_data": noisy_data,
+                "raw_data": raw_data,
                 "optimized_data": result.reconstructed,
                 "marker_names": marker_names,
-                "ground_truth_data": ground_truth_data,
             }
         )
 
@@ -113,7 +110,6 @@ class ResultsWriter(BaseWriter):
             "marker_names": marker_names,
             "n_frames": result.n_frames,
             "n_markers": result.n_markers,
-            "has_ground_truth": ground_truth_data is not None,
         }
 
         with open(self.output_dir / "topology.json", mode='w') as f:

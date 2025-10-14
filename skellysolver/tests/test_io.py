@@ -106,7 +106,7 @@ class TestCSVWriters:
         writer.write(
             filepath=output_path,
             data={
-                "noisy_data": noisy,
+                "raw_data": noisy,
                 "optimized_data": optimized,
                 "marker_names": marker_names,
             }

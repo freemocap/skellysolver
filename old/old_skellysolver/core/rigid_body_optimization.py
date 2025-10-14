@@ -318,7 +318,7 @@ class TranslationSmoothnessFactor(pyceres.CostFunction):
 
 def optimize_rigid_body(
     *,
-    noisy_data: np.ndarray,
+    raw_data: np.ndarray,
     rigid_edges: list[tuple[int, int]],
     reference_distances: np.ndarray,
     config: OptimizationConfig,
@@ -330,7 +330,7 @@ def optimize_rigid_body(
     Bundle adjustment: jointly optimize reference geometry AND poses.
 
     Args:
-        noisy_data: (n_frames, n_markers, 3) measured positions
+        raw_data: (n_frames, n_markers, 3) measured positions
         rigid_edges: List of (i, j) pairs that should remain rigid
         reference_distances: (n_markers, n_markers) initial distance estimates
         config: OptimizationConfig
@@ -341,7 +341,7 @@ def optimize_rigid_body(
     Returns:
         OptimizationResult with optimized reference geometry and poses
     """
-    n_frames, n_markers, _ = noisy_data.shape
+    n_frames, n_markers, _ = raw_data.shape
 
     logger.info("="*80)
     logger.info("BUNDLE ADJUSTMENT OPTIMIZATION")
@@ -352,7 +352,7 @@ def optimize_rigid_body(
     # INITIALIZE REFERENCE GEOMETRY
     # =========================================================================
     logger.info("\nInitializing reference geometry from median frame...")
-    median_frame = np.median(noisy_data, axis=0)
+    median_frame = np.median(raw_data, axis=0)
     reference_geometry = median_frame - np.mean(median_frame, axis=0)
     reference_params = reference_geometry.flatten().copy()
 
@@ -364,7 +364,7 @@ def optimize_rigid_body(
 
     for frame_idx in range(n_frames):
         quat_ceres = np.array([1.0, 0.0, 0.0, 0.0])  # Identity rotation
-        translation = np.mean(noisy_data[frame_idx], axis=0)
+        translation = np.mean(raw_data[frame_idx], axis=0)
         poses.append((quat_ceres, translation))
 
     # =========================================================================
@@ -390,7 +390,7 @@ def optimize_rigid_body(
         quat, trans = pose_params[frame_idx]
         for point_idx in range(n_markers):
             cost = MeasurementFactorBA(
-                measured_point=noisy_data[frame_idx, point_idx],
+                measured_point=raw_data[frame_idx, point_idx],
                 marker_idx=point_idx,
                 n_markers=n_markers,
                 weight=config.lambda_data
@@ -416,7 +416,7 @@ def optimize_rigid_body(
             quat, trans = pose_params[frame_idx]
             for i, j in soft_edges:
                 cost = SoftDistanceFactorBA(
-                    measured_point=noisy_data[frame_idx, j],
+                    measured_point=raw_data[frame_idx, j],
                     marker_idx_on_body=i,
                     n_markers=n_markers,
                     median_distance=soft_distances[i, j],

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def evaluate_reconstruction(
     *,
-    noisy_data: np.ndarray,
+    raw_data: np.ndarray,
     optimized_data: np.ndarray,
     reference_distances: np.ndarray,
     topology: 'RigidBodyTopology',
@@ -18,7 +18,7 @@ def evaluate_reconstruction(
     Evaluate reconstruction quality.
     
     Args:
-        noisy_data: (n_frames, n_markers, 3)
+        raw_data: (n_frames, n_markers, 3)
         optimized_data: (n_frames, n_markers, 3)
         reference_distances: (n_markers, n_markers) target distances
         topology: RigidBodyTopology
@@ -27,7 +27,7 @@ def evaluate_reconstruction(
     Returns:
         Dictionary of metrics
     """
-    n_frames, n_markers, _ = noisy_data.shape
+    n_frames, n_markers, _ = raw_data.shape
     metrics: dict[str, float] = {}
     
     # =========================================================================
@@ -42,7 +42,7 @@ def evaluate_reconstruction(
     for i, j in topology.rigid_edges:
         target_dist = reference_distances[i, j]
         
-        noisy_dists = np.linalg.norm(noisy_data[:, i, :] - noisy_data[:, j, :], axis=1)
+        noisy_dists = np.linalg.norm(raw_data[:, i, :] - raw_data[:, j, :], axis=1)
         opt_dists = np.linalg.norm(optimized_data[:, i, :] - optimized_data[:, j, :], axis=1)
         
         noisy_edge_errors.extend(np.abs(noisy_dists - target_dist))
@@ -61,7 +61,7 @@ def evaluate_reconstruction(
     optimized_consistency = []
     
     for i, j in topology.rigid_edges:
-        noisy_dists = np.linalg.norm(noisy_data[:, i, :] - noisy_data[:, j, :], axis=1)
+        noisy_dists = np.linalg.norm(raw_data[:, i, :] - raw_data[:, j, :], axis=1)
         opt_dists = np.linalg.norm(optimized_data[:, i, :] - optimized_data[:, j, :], axis=1)
         
         noisy_consistency.append(np.std(noisy_dists))
@@ -79,7 +79,7 @@ def evaluate_reconstruction(
     if ground_truth_data is not None:
         logger.info("\nAccuracy metrics (vs ground truth):")
         
-        noisy_errors = np.linalg.norm(noisy_data - ground_truth_data, axis=2)
+        noisy_errors = np.linalg.norm(raw_data - ground_truth_data, axis=2)
         opt_errors = np.linalg.norm(optimized_data - ground_truth_data, axis=2)
         
         metrics['noisy_position_error_mean_mm'] = float(np.mean(noisy_errors) * 1000)
@@ -102,7 +102,7 @@ def evaluate_reconstruction(
     logger.info("\nSmoothness metrics:")
     
     # Centroid acceleration (measure of jitter)
-    noisy_centroids = np.mean(noisy_data, axis=1)
+    noisy_centroids = np.mean(raw_data, axis=1)
     opt_centroids = np.mean(optimized_data, axis=1)
     
     noisy_vel = np.diff(noisy_centroids, axis=0)

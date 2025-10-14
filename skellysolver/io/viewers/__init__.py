@@ -17,12 +17,12 @@ Usage:
     print(f"Open {viewer_path} in a browser!")
 """
 
-from .base_viewer import (
+from skellysolver.io.viewers.html_viewers.base_viewer import (
     BaseViewerGenerator,
     HTMLViewerGenerator,
 )
-from .eye_viewer import generate_eye_tracking_viewer, generate_rigid_body_viewer
-from .rigid_viewer import RigidBodyViewerGenerator
+from skellysolver.io.viewers.html_viewers.eye_viewer import generate_eye_tracking_viewer, generate_rigid_body_viewer
+from skellysolver.io.viewers.html_viewers.rigid_viewer import RigidBodyViewerGenerator
 
 
 __all__ = [

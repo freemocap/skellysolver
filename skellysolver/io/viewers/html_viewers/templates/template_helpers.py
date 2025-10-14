@@ -22,7 +22,7 @@ def get_templates_dir() -> Path:
     Returns:
         Path to templates directory
     """
-    return Path(__file__).parent
+    return Path(__file__).parent.parent
 
 
 def get_template_path(
