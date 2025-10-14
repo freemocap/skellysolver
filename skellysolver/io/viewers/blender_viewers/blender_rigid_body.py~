@@ -2,7 +2,6 @@
 
 This module handles loading and visualizing rigid body marker trajectories
 from tidy CSV format, including marker spheres and connecting edges.
-Includes raw data visualization alongside processed data.
 """
 
 import csv
@@ -45,9 +44,6 @@ class RigidBodyConfig:
     topology_path: Path
     """Path to topology.json"""
 
-    raw_csv_path: Path | None = None
-    """Path to raw_trajectory.csv (optional, same format as trajectory_data.csv)"""
-
     data_scale: float = 1.0
     """Scale factor for data (e.g. 0.001 for mm to meters)"""
 
@@ -56,12 +52,6 @@ class RigidBodyConfig:
 
     tube_radius: float = 0.003
     """Radius of connecting tubes (meters)"""
-
-    raw_sphere_radius: float = 0.003
-    """Radius of raw data marker spheres (meters)"""
-
-    raw_tube_radius: float = 0.0008
-    """Radius of raw data connecting tubes (meters)"""
 
     rigid_edge_color: tuple[float, float, float, float] = (0.0, 1.0, 1.0, 1.0)
     """RGBA color for rigid edges (cyan)"""
@@ -72,12 +62,6 @@ class RigidBodyConfig:
     display_edge_color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
     """RGBA color for display edges (white)"""
 
-    raw_marker_color: tuple[float, float, float] = (1.0, 0.0, 0.0)
-    """RGB color for raw data markers (red)"""
-
-    raw_edge_color: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.5)
-    """RGBA color for raw data trajectory connections (semi-transparent red)"""
-
     show_rigid_edges: bool = False
     """Show rigid constraint edges"""
 
@@ -86,12 +70,6 @@ class RigidBodyConfig:
 
     show_display_edges: bool = True
     """Show display edges"""
-
-    show_raw_data: bool = True
-    """Show raw data markers"""
-
-    show_raw_connections: bool = True
-    """Show connections between consecutive raw data points"""
 
     frame_start: int = 0
     """Start frame for animation"""
@@ -202,8 +180,7 @@ def create_marker_material(
     name: str,
     color: tuple[float, float, float],
     metallic: float = 0.3,
-    roughness: float = 0.4,
-    emission_strength: float = 0.5
+    roughness: float = 0.4
 ) -> bpy.types.Material:
     """Create a material for markers."""
     mat = bpy.data.materials.new(name=name)
@@ -222,7 +199,7 @@ def create_marker_material(
     node_bsdf.inputs['Roughness'].default_value = roughness
 
     node_emission.inputs['Color'].default_value = (*color, 1.0)
-    node_emission.inputs['Strength'].default_value = emission_strength
+    node_emission.inputs['Strength'].default_value = 0.5
 
     links = mat.node_tree.links
     links.new(input=node_bsdf.outputs['BSDF'], output=node_mix.inputs[1])
@@ -281,8 +258,8 @@ def create_sphere_marker(
     bpy.ops.mesh.primitive_uv_sphere_add(
         radius=radius,
         location=location,
-        segments=16,
-        ring_count=8
+        segments=32,
+        ring_count=16
     )
 
     sphere = bpy.context.active_object
@@ -391,54 +368,6 @@ def create_edge_curves(
     return curve_obj
 
 
-def create_trajectory_curves(
-    *,
-    name: str,
-    marker_name: str,
-    trajectory: list[tuple[float, float, float]],
-    radius: float,
-    material: bpy.types.Material,
-    parent: bpy.types.Object,
-    frame_start: int,
-    keyframe_step: int = 1
-) -> bpy.types.Object | None:
-    """Create a curve showing the trajectory path for a single marker."""
-    # Filter out NaN positions
-    valid_positions = [
-        (i, pos) for i, pos in enumerate(trajectory)
-        if not (np.isnan(pos[0]) or np.isnan(pos[1]) or np.isnan(pos[2]))
-    ]
-
-    if len(valid_positions) < 2:
-        return None
-
-    curve_data = bpy.data.curves.new(name=f"{name}_{marker_name}_Trail", type='CURVE')
-    curve_data.dimensions = '3D'
-    curve_data.bevel_depth = radius
-    curve_data.bevel_resolution = 3
-    curve_data.resolution_u = 4
-    curve_data.fill_mode = 'FULL'
-    curve_data.use_fill_caps = True
-
-    curve_obj = bpy.data.objects.new(name=f"{name}_{marker_name}", object_data=curve_data)
-    bpy.context.collection.objects.link(object=curve_obj)
-    curve_obj.parent = parent
-
-    if curve_obj.data.materials:
-        curve_obj.data.materials[0] = material
-    else:
-        curve_obj.data.materials.append(material)
-
-    # Create spline with all valid positions
-    spline = curve_data.splines.new(type='POLY')
-    spline.points.add(count=len(valid_positions) - 1)
-
-    for point_idx, (_, pos) in enumerate(valid_positions):
-        spline.points[point_idx].co = (*pos, 1.0)
-
-    return curve_obj
-
-
 # ============================================================================
 # ANIMATION
 # ============================================================================
@@ -498,20 +427,9 @@ def create_rigid_body_visualization(
         data_scale=config.data_scale
     )
 
-    # Load raw data if provided
-    raw_traj_data: TidyTrajectoryData | None = None
-    if config.raw_csv_path and config.show_raw_data:
-        print("\nLoading raw trajectory data...")
-        raw_traj_data = load_tidy_csv(
-            filepath=config.raw_csv_path,
-            data_scale=config.data_scale
-        )
-
     print(f"\nTopology: {topology['name']}")
     print(f"Markers: {traj_data.n_markers}")
     print(f"Frames: {traj_data.n_frames}")
-    if raw_traj_data:
-        print(f"Raw data frames: {raw_traj_data.n_frames}")
 
     # Create parent empty
     bpy.ops.object.empty_add(type='ARROWS', location=(0, 0, 0))
@@ -534,19 +452,9 @@ def create_rigid_body_visualization(
         mat = create_marker_material(name=f"Marker_{marker_name}", color=color)
         marker_materials[marker_name] = mat
 
-    # Raw data material (red with slight emission)
-    raw_marker_mat = create_marker_material(
-        name="RawMarker",
-        color=config.raw_marker_color,
-        metallic=0.5,
-        roughness=0.6,
-        emission_strength=0.3
-    )
-
     rigid_edge_mat = create_edge_material(name="RigidEdge", color=config.rigid_edge_color)
     soft_edge_mat = create_edge_material(name="SoftEdge", color=config.soft_edge_color)
     display_edge_mat = create_edge_material(name="DisplayEdge", color=config.display_edge_color)
-    raw_edge_mat = create_edge_material(name="RawEdge", color=config.raw_edge_color)
 
     # Create markers
     print("\nCreating marker spheres...")
@@ -562,21 +470,6 @@ def create_rigid_body_visualization(
             parent=parent
         )
         markers[marker_name] = sphere
-
-    # Create raw data markers
-    raw_markers = {}
-    if raw_traj_data and config.show_raw_data:
-        print(f"\nCreating raw data markers ({raw_traj_data.n_markers} markers)...")
-        for marker_name in raw_traj_data.marker_names:
-            initial_pos = raw_traj_data.frames[0][marker_name]
-            sphere = create_sphere_marker(
-                name=f"RawMarker_{marker_name}",
-                radius=config.raw_sphere_radius,
-                location=initial_pos,
-                material=raw_marker_mat,
-                parent=parent
-            )
-            raw_markers[marker_name] = sphere
 
     # Create edges
     print("\nCreating edge curves...")
@@ -620,22 +513,6 @@ def create_rigid_body_visualization(
             parent=parent
         )
 
-    # Create raw data trajectory connections
-    if raw_traj_data and config.show_raw_data and config.show_raw_connections:
-        print(f"\nCreating raw data trajectory connections...")
-        for marker_name in raw_traj_data.marker_names:
-            trajectory = [raw_traj_data.frames[f][marker_name] for f in range(raw_traj_data.n_frames)]
-            create_trajectory_curves(
-                name="RawTrail",
-                marker_name=marker_name,
-                trajectory=trajectory,
-                radius=config.raw_tube_radius,
-                material=raw_edge_mat,
-                parent=parent,
-                frame_start=config.frame_start,
-                keyframe_step=config.keyframe_step
-            )
-
     # Animate markers
     print(f"\nAnimating markers...")
     for marker_name, sphere in markers.items():
@@ -647,51 +524,29 @@ def create_rigid_body_visualization(
             keyframe_step=config.keyframe_step
         )
 
-    # Animate raw markers
-    if raw_traj_data and raw_markers:
-        print(f"\nAnimating raw data markers...")
-        for marker_name, sphere in raw_markers.items():
-            trajectory = [raw_traj_data.frames[f][marker_name] for f in range(raw_traj_data.n_frames)]
-            animate_marker(
-                marker=sphere,
-                trajectory=trajectory,
-                frame_start=config.frame_start,
-                keyframe_step=config.keyframe_step
-            )
-
     print("\n✓ Rigid body visualization complete")
-    print(f"  Processed markers: {len(markers)} spheres")
-    if raw_markers:
-        print(f"  Raw data markers: {len(raw_markers)} spheres")
+    print(f"  Markers: {len(markers)} spheres")
     print(f"  Frames: {config.frame_start} to {config.frame_start + traj_data.n_frames - 1}")
 
     return parent, markers, traj_data, topology
 
 
 
-# Example usage
-config = RigidBodyConfig(
-    csv_path=Path(
-        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\examples\output\ferret_skull_tracking_EO5\trajectory_data.csv"
-    ),
-    topology_path=Path(
-        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\examples\output\ferret_skull_tracking_EO5\topology.json"
-    ),
-    raw_csv_path=Path(
-        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\examples\output\ferret_skull_tracking_EO5\raw_trajectory_data.csv"
-    ),
-    data_scale=0.001,  # mm to meters
-    sphere_radius=0.003,
-    tube_radius=0.001,
-    raw_sphere_radius=0.002,  # Smaller for raw data
-    raw_tube_radius=0.0008,  # Thinner connections
-    show_rigid_edges=False,
-    show_soft_edges=True,
-    show_display_edges=True,
-    show_raw_data=True,
-    show_raw_connections=True,
-    frame_start=0,
-    keyframe_step=3,
-)
+config =  RigidBodyConfig( 
+            csv_path=Path(
+                r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\examples\output\ferret_skull_tracking_EO5\trajectory_data.csv"
+            ),
+            topology_path=Path(
+                r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\examples\output\ferret_skull_tracking_EO5\topology.json"
+            ),
+            data_scale=0.001,  # mm to meters
+            sphere_radius=0.005,
+            tube_radius=0.001,
+            show_rigid_edges=False,
+            show_soft_edges=True,
+            show_display_edges=True,
+            frame_start=0,
+            keyframe_step=3,
+        )
 
 create_rigid_body_visualization(config=config)
