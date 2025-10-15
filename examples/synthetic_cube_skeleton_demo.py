@@ -9,6 +9,8 @@ import numpy as np
 import logging
 from scipy.spatial.transform import Rotation
 
+from skellysolver.data.dataset_manager import save_trajectory_csv
+from skellysolver.data.trajectory_dataset import TrajectoryDataset, TrajectoryType, TrajectoryND
 from skellysolver.pipelines.skeleton_pipeline.skeleton_definitions.synthetic_cube_skeleton_v1 import \
     SYNTHETIC_CUBE_SKELETON
 from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline import (
@@ -195,38 +197,7 @@ def generate_synthetic_trajectory(
     return ground_truth, noisy
 
 
-def save_trajectory_csv(
-    *,
-    filepath: Path,
-    data: dict[str, np.ndarray],
-    keypoint_names: list[str]
-) -> None:
-    """Save trajectory data as tidy CSV format.
-    
-    Args:
-        filepath: Output CSV path
-        data: Dictionary mapping keypoint names to (n_frames, 3) positions
-        keypoint_names: List of keypoint names in order
-    """
-    import csv
-    
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    
-    n_frames = len(data[keypoint_names[0]])
-    
-    with open(filepath, mode='w', encoding='utf-8', newline='') as f:
-        writer = csv.writer(f)
-        
-        # Write header
-        writer.writerow(["frame", "keypoint", "x", "y", "z"])
-        
-        # Write data
-        for frame_idx in range(n_frames):
-            for kp_name in keypoint_names:
-                x, y, z = data[kp_name][frame_idx]
-                writer.writerow([frame_idx, kp_name, f"{x:.6f}", f"{y:.6f}", f"{z:.6f}"])
-    
-    logger.info(f"Saved trajectory to {filepath}")
+
 
 
 def compute_reconstruction_metrics(
@@ -297,14 +268,33 @@ def run_synthetic_cube_skeleton_demo() -> None:
     # Setup output directory
     output_dir = Path("output/synthetic_cube_skeleton")
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
+    logger.info("  Converting to TrajectoryDataset...")
+    trajectory_data: dict[str, TrajectoryND] = {}
+    n_frames = len(next(iter(noisy.values())))
+
+    for kp_name, positions in noisy.items():
+        trajectory_data[kp_name] = TrajectoryND(
+            name=kp_name,
+            values=positions,
+            trajectory_type=TrajectoryType.POSITION,
+            confidence=None,
+            metadata={}
+        )
+
+    noisy_dataset = TrajectoryDataset(
+        data=trajectory_data,
+        frame_indices=np.arange(n_frames),
+        metadata={}
+    )
+
     # Save noisy input data
     input_csv = output_dir / "input_data.csv"
     save_trajectory_csv(
-        filepath=input_csv,
-        data=noisy,
-        keypoint_names=list(SYNTHETIC_CUBE_SKELETON.keypoint_to_tracked_mapping.values())
+        dataset=noisy_dataset,
+        filepath=input_csv
     )
+    logger.info(f"  Saved input data to: {input_csv}")
     
     # Configure pipeline
     logger.info("\nConfiguring skeleton pipeline...")
@@ -314,11 +304,12 @@ def run_synthetic_cube_skeleton_demo() -> None:
         function_tolerance=1e-6,
         gradient_tolerance=1e-8,
         parameter_tolerance=1e-7,
-        minimizer_progress_to_stdout=False,
     )
     
     chunking_config = ChunkingConfig(
-        enabled=False,  # Disable chunking for this small demo
+        chunk_size=50,
+        overlap_size=10,
+        blend_window=5,
     )
     
     config = SkeletonPipelineConfig(
@@ -340,12 +331,7 @@ def run_synthetic_cube_skeleton_demo() -> None:
     logger.info("\nRunning skeleton optimization pipeline...")
     pipeline = SkeletonPipeline.from_config(config=config)
     
-    # Set skeleton (TODO: this should be automatic from config)
-    pipeline.skeleton = SYNTHETIC_CUBE_SKELETON
-    pipeline._keypoint_to_tracked = {
-        v: k for k, v in SYNTHETIC_CUBE_SKELETON.keypoint_to_tracked_mapping.items()
-    }
-    
+
     result = pipeline.run()
     
     # Compute reconstruction error

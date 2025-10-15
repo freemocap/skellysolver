@@ -12,6 +12,7 @@ import numpy as np
 from pydantic import BaseModel
 
 from skellysolver.data.trajectory_dataset import TrajectoryND, TrajectoryDataset
+from skellysolver.solvers.base_solver import SolverResult
 
 logger = logging.getLogger(__name__)
 

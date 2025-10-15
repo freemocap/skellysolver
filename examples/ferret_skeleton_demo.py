@@ -31,7 +31,7 @@ def run_ferret_skeleton_tracking(*, config: SkeletonPipelineConfig) -> None:
     # TODO: These should be in SkeletonPipelineConfig
     pipeline.skeleton = FERRET_SKELETON_V1
     pipeline._keypoint_to_tracked = {
-        v: k for k, v in FERRET_SKELETON_V1.keypoint_to_tracked_mapping.items()
+        v: k for k, v in FERRET_SKELETON_V1.keypoint_to_trajectory_mapping.items()
     }
 
     # Run pipeline

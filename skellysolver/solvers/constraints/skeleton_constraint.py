@@ -16,7 +16,6 @@ class SkeletonConstraint(BaseConstraint):
     segments: list[SegmentConstraint] = []
     linkages: list[LinkageConstraint] = []
     chains: list[ChainConstraint] = []
-    keypoint_to_tracked_mapping: dict[str, KeypointConstraint] = {}
 
     @property
     def root(self) -> KeypointConstraint:
@@ -37,20 +36,8 @@ class SkeletonConstraint(BaseConstraint):
 
         # Bidirectional validation for linkages <-> chains
         self._validate_no_secret_linkages()
-
-        # Each keypoint has a tracked name mapping
-        self._validate_tracked_keypoint_mapping()
-
-
         return self
 
-    def _validate_tracked_keypoint_mapping(self) -> None:
-        for keypoint in self.keypoints:
-            if not keypoint in list(self.keypoint_to_tracked_mapping.values()):
-                raise ValueError(
-                    f"KeypointConstraint '{keypoint.name}' has no tracked name mapping in "
-                    f"skeleton.tracked_to_keypoint_mapping"
-                )
     def _validate_no_orphaned_keypoints(self) -> None:
         """Ensure every keypoint in skeleton.keypoints is used in at least one segment."""
         keypoints_in_segments: list[KeypointConstraint] = []

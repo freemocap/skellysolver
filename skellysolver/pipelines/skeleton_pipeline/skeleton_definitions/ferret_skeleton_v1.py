@@ -222,7 +222,7 @@ FERRET_SKELETON_V1 = SkeletonConstraint(
         THORACIC_LUMBAR_TO_CAUDAL_SPINE,
     ],
     chains=[SPINE_CHAIN],
-    keypoint_to_tracked_mapping={
+    keypoint_to_trajectory_mapping={
          RIGHT_EYE_CAMERA:"right_cam_tip",
          LEFT_EYE_CAMERA:"left_cam_tip",
          CAMERA_BASE:"base",

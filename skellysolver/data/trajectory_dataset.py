@@ -300,21 +300,16 @@ class TrajectoryDataset(ABaseModel):
         first_traj = next(iter(self.data.values()))
         return first_traj.n_dims
 
-    def slice_frames(self, *, start_frame: int, end_frame: int) -> "TrajectoryDataset":
+    def slice_frames(self, *, start_frame: int, end_frame: int) -> Self:
         """Extract a slice of frames from the dataset.
 
-        Args:
-            start_frame: Start frame index
-            end_frame: End frame index (exclusive)
-
-        Returns:
-            New dataset containing only the specified frames
+        Creates COPIES, not views, to ensure independence.
         """
         sliced_data = {}
         for name, traj in self.data.items():
-            sliced_values = traj.values[start_frame:end_frame]
+            sliced_values = traj.values[start_frame:end_frame].copy()
             sliced_confidence = (
-                traj.confidence[start_frame:end_frame]
+                traj.confidence[start_frame:end_frame].copy()
                 if traj.confidence is not None
                 else None
             )
@@ -329,7 +324,7 @@ class TrajectoryDataset(ABaseModel):
 
         return TrajectoryDataset(
             data=sliced_data,
-            frame_indices=self.frame_indices[start_frame:end_frame],
+            frame_indices=self.frame_indices[start_frame:end_frame].copy(),
             metadata=self.metadata
         )
 

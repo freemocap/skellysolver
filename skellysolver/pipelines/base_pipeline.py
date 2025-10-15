@@ -80,7 +80,7 @@ class BasePipeline(ABaseModel, ABC):
         )
 
     @abstractmethod
-    def setup_and_solve(self, *, chunk_data: TrajectoryDataset) -> SolverResult:
+    def setup_and_solve(self, chunk_data: TrajectoryDataset) -> SolverResult:
         """Setup solver and solve for a chunk of data.
 
         This method is called for each chunk (or once for non-chunked data).
@@ -104,7 +104,7 @@ class BasePipeline(ABaseModel, ABC):
         logger.info(f"Pipeline config: {self.config}")
 
         # Run chunked optimization with parallel processing
-        chunk_processor = ChunkProcessor.from_config(config=self.config.parallel)
+        chunk_processor = ChunkProcessor(config=self.config.parallel)
         self.solver_result = chunk_processor.chunk_run_pipeline(
             input_data=self.input_data,
             setup_and_solve_fn=self.setup_and_solve,

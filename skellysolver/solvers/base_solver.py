@@ -53,9 +53,7 @@ class SolverResult(ABaseModel, ABC):
     specific to their problem type.
     """
     success: bool
-    num_iterations: int
-    initial_cost: float
-    final_cost: float
+    summary: pyceres.SolverSummary
     solve_time_seconds: float
     raw_data: TrajectoryDataset
     optimized_data: TrajectoryDataset | None = None
@@ -72,9 +70,9 @@ class SolverResult(ABaseModel, ABC):
                 f"❌ OPTIMIZATION FAILED TO CONVERGE!\n"
                 f"\n"
                 f"Optimization Details:\n"
-                f"  Iterations completed: {self.num_iterations}\n"
-                f"  Initial cost:         {self.initial_cost:.6f}\n"
-                f"  Final cost:           {self.final_cost:.6f}\n"
+                f"  Iterations completed: {self.summary.num_iterations}\n"
+                f"  Initial cost:         {self.summary.initial_cost:.6f}\n"
+                f"  Final cost:           {self.summary.final_cost:.6f}\n"
                 f"  Cost reduction:       {self.cost_reduction_percent:.1f}%\n"
                 f"  Solve time:           {self.solve_time_seconds:.2f}s\n"
                 f"\n"
@@ -104,9 +102,9 @@ class SolverResult(ABaseModel, ABC):
         Returns:
             Fraction of cost reduced (0-1)
         """
-        if self.initial_cost == 0.0:
+        if self.summary.initial_cost == 0.0:
             return 0.0
-        return (self.initial_cost - self.final_cost) / self.initial_cost
+        return (self.summary.initial_cost - self.summary.final_cost) / self.summary.initial_cost
 
     @property
     def cost_reduction_percent(self) -> float:
@@ -118,18 +116,14 @@ class SolverResult(ABaseModel, ABC):
         return self.cost_reduction * 100.0
 
     @classmethod
-    @abstractmethod
     def from_pyceres_summary(
             cls,
             *,
             summary: pyceres.SolverSummary,
             solve_time_seconds: float,
             raw_data: TrajectoryDataset,
-            **kwargs
     ) -> Self:
-        """Create result from pyceres SolverSummary.
-
-        Subclasses must implement this to create their specific result type.
+        """Create result from pyceres summary.
 
         Args:
             summary: pyceres solver summary
@@ -137,15 +131,28 @@ class SolverResult(ABaseModel, ABC):
             raw_data: Original input data
 
         Returns:
-            SolverResult subclass instance
+            SkeletonSolverResult instance
         """
-        pass
+        success = summary.termination_type in [
+            pyceres.TerminationType.CONVERGENCE,
+            pyceres.TerminationType.USER_SUCCESS
+        ]
+
+
+        return cls(
+            success=success,
+            summary= summary,
+            solve_time_seconds=solve_time_seconds,
+            raw_data=raw_data,
+        )
 
 
 class SolverConfig(ABaseModel):
     """Configuration for pyceres nonlinear optimization.
 
     Used by ALL pipelines - rigid body tracking, eye tracking, skeleton solving.
+
+    Now stores loss function parameters instead of objects for picklability.
     """
 
     # Convergence criteria
@@ -157,11 +164,37 @@ class SolverConfig(ABaseModel):
     linear_solver_type: pyceres.LinearSolverType = pyceres.LinearSolverType.SPARSE_NORMAL_CHOLESKY
     trust_region_strategy_type: pyceres.TrustRegionStrategyType = pyceres.TrustRegionStrategyType.LEVENBERG_MARQUARDT
 
-    # Loss function (None = no robust loss)
-    loss_function: pyceres.LossFunction | None = Field(default_factory=lambda: pyceres.HuberLoss(2.0))
+    # Loss function (stored as type + params for picklability)
+    loss_type: str = "huber"  # "none", "huber", "cauchy", "soft_l_one", "arctan", "tolerant"
+    loss_scale: float = 2.0  # Used by huber, cauchy, soft_l_one, arctan
+    loss_a: float | None = None  # Used by tolerant
+    loss_b: float | None = None  # Used by tolerant
 
     # Logging
     minimizer_progress_to_stdout: bool = True
+
+    def get_loss_function(self) -> pyceres.LossFunction | None:
+        """Create loss function from stored parameters.
+
+        Returns:
+            pyceres.LossFunction instance or None
+        """
+        if self.loss_type == "none":
+            return None
+        elif self.loss_type == "huber":
+            return pyceres.HuberLoss(self.loss_scale)
+        elif self.loss_type == "cauchy":
+            return pyceres.CauchyLoss(self.loss_scale)
+        elif self.loss_type == "soft_l_one":
+            return pyceres.SoftLOneLoss(self.loss_scale)
+        elif self.loss_type == "arctan":
+            return pyceres.ArctanLoss(self.loss_scale)
+        elif self.loss_type == "tolerant":
+            if self.loss_a is None or self.loss_b is None:
+                raise ValueError("Tolerant loss requires both loss_a and loss_b parameters")
+            return pyceres.TolerantLoss(self.loss_a, self.loss_b)
+        else:
+            raise ValueError(f"Unknown loss_type: {self.loss_type}")
 
     def to_solver_options(self) -> pyceres.SolverOptions:
         """Convert to pyceres SolverOptions."""
@@ -172,13 +205,17 @@ class SolverConfig(ABaseModel):
         options.parameter_tolerance = self.parameter_tolerance
         options.linear_solver_type = self.linear_solver_type
         options.trust_region_strategy_type = self.trust_region_strategy_type
-
         options.minimizer_progress_to_stdout = self.minimizer_progress_to_stdout
         return options
 
     def __str__(self) -> str:
         """Human-readable solver config."""
-        loss_str = str(type(self.loss_function).__name__) if self.loss_function else "None"
+        if self.loss_type == "none":
+            loss_str = "None"
+        elif self.loss_type == "tolerant":
+            loss_str = f"TolerantLoss(a={self.loss_a}, b={self.loss_b})"
+        else:
+            loss_str = f"{self.loss_type.title()}Loss({self.loss_scale})"
 
         lines = [
             "Solver Configuration:",
@@ -283,7 +320,7 @@ class PyceresSolver(ABaseModel):
             loss: Optional loss function (uses config default if None)
         """
         if loss is None:
-            loss = self.config.loss_function
+            loss = self.config.get_loss_function()
 
         self.problem.add_residual_block(cost, loss, parameters)
 

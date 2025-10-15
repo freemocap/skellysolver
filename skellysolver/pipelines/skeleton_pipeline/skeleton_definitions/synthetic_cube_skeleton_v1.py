@@ -55,7 +55,7 @@ CUBE_V7 = KeypointConstraint(
 )
 
 CUBE_ASYMMETRIC_V8 = KeypointConstraint(
-    name="cube_assymetric_v8",
+    name="cube_asymmetric_v8",
     definition="Asymmetric cube vertex 8 (extra vertex to break symmetry)"
 )
 
@@ -97,7 +97,8 @@ CUBE_BODY = SegmentConstraint(
         CUBE_V5,
         CUBE_V6,
         CUBE_V7,
-        CUBE_ASYMMETRIC_V8
+        CUBE_ASYMMETRIC_V8,
+        TAIL_BASE
     ],
     rigidity=1.0,  # Fully rigid cube
 )
@@ -179,6 +180,7 @@ SYNTHETIC_CUBE_SKELETON = SkeletonConstraint(
         CUBE_V5,
         CUBE_V6,
         CUBE_V7,
+        CUBE_ASYMMETRIC_V8,
         TAIL_BASE,
         TAIL_MID1,
         TAIL_MID2,
@@ -196,19 +198,5 @@ SYNTHETIC_CUBE_SKELETON = SkeletonConstraint(
         TAIL_1_TO_2,
     ],
     chains=[TAIL_CHAIN],
-    keypoint_to_tracked_mapping={
-        CUBE_V0: "cube_v0",
-        CUBE_V1: "cube_v1",
-        CUBE_V2: "cube_v2",
-        CUBE_V3: "cube_v3",
-        CUBE_V4: "cube_v4",
-        CUBE_V5: "cube_v5",
-        CUBE_V6: "cube_v6",
-        CUBE_V7: "cube_v7",
-        CUBE_ASYMMETRIC_V8: "cube_asymmetric_v8",
-        TAIL_BASE: "tail_base",
-        TAIL_MID1: "tail_mid1",
-        TAIL_MID2: "tail_mid2",
-        TAIL_TIP: "tail_tip",
-    }
+
 )

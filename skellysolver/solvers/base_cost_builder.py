@@ -45,9 +45,7 @@ class BaseCostBuilder(ABaseModel, ABC, Generic[TConstraint]):
     @abstractmethod
     def build_all_costs(
         self,
-        *,
-        reference_geometry: np.ndarray,
-        **kwargs: object
+        **kwargs
     ) -> CostCollection:
         """Build all costs from the constraint.
         
