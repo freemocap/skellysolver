@@ -62,7 +62,7 @@ Copy all files maintaining the directory structure shown above. Total: 45 files,
 
 ```python
 from pathlib import Path
-from skellysolver.solvers.rigid_body import (
+from skellysolver.pipelines import (
     RigidBodyPipeline,
     RigidBodyConfig,
 )
@@ -296,7 +296,7 @@ All pipelines inherit from `BasePipeline` and implement these methods:
 ### RigidBodyPipeline
 
 ```python
-from skellysolver.solvers.rigid_body import (
+from skellysolver.pipelines import (
     RigidBodyPipeline,
     RigidBodyConfig,
 )
@@ -324,7 +324,7 @@ result = pipeline.run()
 ### EyeTrackingPipeline
 
 ```python
-from skellysolver.solvers.eye_tracking import (
+from skellysolver.pipelines import (
     EyeTrackingPipeline,
     EyeTrackingConfig,
     CameraIntrinsics,
@@ -467,7 +467,7 @@ print(f"Best parameters: {best_params}")
 ### Readers
 
 ```python
-from skellysolver.io.readers import (
+from skellysolver.utilities import (
     TidyCSVReader,
     WideCSVReader,
     DLCCSVReader,
@@ -482,7 +482,7 @@ data = reader.read(filepath=Path("data.csv"))
 ### Writers
 
 ```python
-from skellysolver.io.writers import (
+from skellysolver.utilities import (
     ResultsWriter,
     TrajectoryCSVWriter,
     JSONWriter,
@@ -511,7 +511,7 @@ csv_writer.write(
 ### Viewers
 
 ```python
-from skellysolver.io.viewers import (
+from skellysolver.utilities import (
     generate_rigid_body_viewer,
     generate_eye_tracking_viewer,
 )
@@ -542,7 +542,7 @@ result = run_ferret_skull_solver(trajectory_dict, ...)
 **After:**
 
 ```python
-from skellysolver.solvers.rigid_body import RigidBodyPipeline, RigidBodyConfig
+from skellysolver.pipelines import RigidBodyPipeline, RigidBodyConfig
 
 config = RigidBodyConfig(input_path=csv_path, ...)
 pipeline = RigidBodyPipeline(config=config)
@@ -563,7 +563,7 @@ result = run_eye_tracking(data, ...)
 **After:**
 
 ```python
-from skellysolver.solvers.eye_tracking import EyeTrackingPipeline, EyeTrackingConfig
+from skellysolver.pipelines import EyeTrackingPipeline, EyeTrackingConfig
 
 config = EyeTrackingConfig(input_path=csv_path, ...)
 pipeline = EyeTrackingPipeline(config=config)
@@ -626,8 +626,9 @@ Ensure all `__init__.py` files are present in the directory structure.
 ### Format Detection Failures
 
 Manually specify format:
+
 ```python
-from skellysolver.io.readers import TidyCSVReader
+from skellysolver.utilities import TidyCSVReader
 
 reader = TidyCSVReader()
 data = reader.read(filepath=Path("data.csv"))

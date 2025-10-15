@@ -12,7 +12,7 @@ from pathlib import Path
 import logging
 
 from skellysolver.core import OptimizationConfig, EyeTrackingWeightConfig, ChunkingConfig
-from skellysolver.solvers import CameraIntrinsics, EyeTrackingConfig, EyeTrackingPipeline
+from skellysolver.pipelines import CameraIntrinsics, EyeTrackingConfig, EyeTrackingPipeline
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s | %(message)s')
 logger = logging.getLogger(__name__)

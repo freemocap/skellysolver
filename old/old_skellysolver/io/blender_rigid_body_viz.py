@@ -190,10 +190,10 @@ def create_eyeball_with_pupil(
     eyeball.name = name
     eyeball.parent = parent
 
-    if eyeball.data.materials:
-        eyeball.data.materials[0] = eyeball_material
+    if eyeball.raw_trajectories.materials:
+        eyeball.raw_trajectories.materials[0] = eyeball_material
     else:
-        eyeball.data.materials.append(eyeball_material)
+        eyeball.raw_trajectories.materials.append(eyeball_material)
 
     bpy.ops.object.shade_smooth()
 
@@ -210,10 +210,10 @@ def create_eyeball_with_pupil(
     iris.parent = eyeball
     iris.parent_type = 'OBJECT'
 
-    if iris.data.materials:
-        iris.data.materials[0] = iris_material
+    if iris.raw_trajectories.materials:
+        iris.raw_trajectories.materials[0] = iris_material
     else:
-        iris.data.materials.append(iris_material)
+        iris.raw_trajectories.materials.append(iris_material)
 
     bpy.ops.object.shade_smooth()
 
@@ -230,10 +230,10 @@ def create_eyeball_with_pupil(
     pupil.parent = eyeball
     pupil.parent_type = 'OBJECT'
 
-    if pupil.data.materials:
-        pupil.data.materials[0] = pupil_material
+    if pupil.raw_trajectories.materials:
+        pupil.raw_trajectories.materials[0] = pupil_material
     else:
-        pupil.data.materials.append(pupil_material)
+        pupil.raw_trajectories.materials.append(pupil_material)
 
     bpy.ops.object.shade_smooth()
 
@@ -249,7 +249,7 @@ def create_gaze_arrow(
 ) -> bpy.types.Object:
     """Create a gaze direction arrow."""
     # Create arrow from curve
-    curve_data = bpy.data.curves.new(name=f"{name}_Curve", type='CURVE')
+    curve_data = bpy.raw_trajectories.curves.new(name=f"{name}_Curve", type='CURVE')
     curve_data.dimensions = '3D'
     curve_data.bevel_depth = 0.001  # Thin arrow
     curve_data.bevel_resolution = 4
@@ -266,12 +266,12 @@ def create_gaze_arrow(
     spline.use_endpoint_u = True
 
     # Create curve object
-    arrow = bpy.data.objects.new(name=name, object_data=curve_data)
+    arrow = bpy.raw_trajectories.objects.new(name=name, object_data=curve_data)
     bpy.context.collection.objects.link(object=arrow)
     arrow.parent = parent
 
     # Create material
-    mat = bpy.data.materials.new(name=f"{name}_Material")
+    mat = bpy.raw_trajectories.materials.new(name=f"{name}_Material")
     mat.use_nodes = True
 
     nodes = mat.node_tree.nodes
@@ -285,10 +285,10 @@ def create_gaze_arrow(
 
     mat.node_tree.links.new(node_emission.outputs['Emission'], node_output.inputs['Surface'])
 
-    if arrow.data.materials:
-        arrow.data.materials[0] = mat
+    if arrow.raw_trajectories.materials:
+        arrow.raw_trajectories.materials[0] = mat
     else:
-        arrow.data.materials.append(mat)
+        arrow.raw_trajectories.materials.append(mat)
 
     return arrow
 
@@ -532,7 +532,7 @@ def create_marker_material(
     roughness: float = 0.4
 ) -> bpy.types.Material:
     """Create a material for markers."""
-    mat = bpy.data.materials.new(name=name)
+    mat = bpy.raw_trajectories.materials.new(name=name)
     mat.use_nodes = True
 
     nodes = mat.node_tree.nodes
@@ -568,7 +568,7 @@ def create_edge_material(
     roughness: float = 0.2
 ) -> bpy.types.Material:
     """Create a material for edges."""
-    mat = bpy.data.materials.new(name=name)
+    mat = bpy.raw_trajectories.materials.new(name=name)
     mat.use_nodes = True
 
     nodes = mat.node_tree.nodes
@@ -610,10 +610,10 @@ def create_sphere_marker(
     sphere.name = name
     sphere.parent = parent
 
-    if sphere.data.materials:
-        sphere.data.materials[0] = material
+    if sphere.raw_trajectories.materials:
+        sphere.raw_trajectories.materials[0] = material
     else:
-        sphere.data.materials.append(material)
+        sphere.raw_trajectories.materials.append(material)
 
     bpy.ops.object.shade_smooth()
 
@@ -635,7 +635,7 @@ def create_edge_curves(
     if not edges:
         return None
 
-    curve_data = bpy.data.curves.new(name=f"{name}_Curve", type='CURVE')
+    curve_data = bpy.raw_trajectories.curves.new(name=f"{name}_Curve", type='CURVE')
     curve_data.dimensions = '3D'
     curve_data.bevel_depth = radius
     curve_data.bevel_resolution = 4
@@ -643,7 +643,7 @@ def create_edge_curves(
     curve_data.fill_mode = 'FULL'
     curve_data.use_fill_caps = True
 
-    curve_obj = bpy.data.objects.new(name=name, object_data=curve_data)
+    curve_obj = bpy.raw_trajectories.objects.new(name=name, object_data=curve_data)
     bpy.context.collection.objects.link(object=curve_obj)
     curve_obj.parent = parent
 
@@ -651,10 +651,10 @@ def create_edge_curves(
     curve_obj.show_all_edges = False
     curve_obj.display_type = 'TEXTURED'
 
-    if curve_obj.data.materials:
-        curve_obj.data.materials[0] = material
+    if curve_obj.raw_trajectories.materials:
+        curve_obj.raw_trajectories.materials[0] = material
     else:
-        curve_obj.data.materials.append(material)
+        curve_obj.raw_trajectories.materials.append(material)
 
     for edge_idx, (i, j) in enumerate(edges):
         marker_i_name = marker_names[i]

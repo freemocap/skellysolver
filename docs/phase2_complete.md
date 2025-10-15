@@ -228,7 +228,7 @@ skull_positions = dataset.to_array(marker_names=skull_markers)
 
 ```python
 # Get single trajectory
-nose_traj = dataset.data["nose"]
+nose_traj = dataset.raw_trajectories["nose"]
 
 print(f"Marker: {nose_traj.marker_name}")
 print(f"Frames: {nose_traj.n_frames}")

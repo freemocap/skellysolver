@@ -1,65 +1,18 @@
-"""Base solver class for all SkellySolver solvers.
-
-All solvers (rigid body, eye tracking, future solvers) inherit from BaseSolver.
-Provides standard interface and workflow:
-1. Load data
-2. Preprocess/validate
-3. Optimize
-4. Evaluate
-5. Save results
-6. Generate visualizations
-
-This eliminates code duplication and ensures consistent API.
-"""
-
 import logging
 import time
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any
 
+import numpy as np
+import pyceres
 from pydantic import Field, model_validator
+from typing_extensions import Self
 
-from skellysolver.core import OptimizationConfig, ChunkingConfig, OptimizationResult
-from skellysolver.data import TrajectoryDataset
-from skellysolver.data.arbitrary_types_model import ABaseModel
+from skellysolver.utilities.arbitrary_types_model import ABaseModel
+from skellysolver.solvers.costs.manifold_helpers import get_quaternion_manifold
+from skellysolver.data.trajectory_dataset import TrajectoryDataset
 
 logger = logging.getLogger(__name__)
 
-
-class SolverTimingReport(ABaseModel):
-    """Timing information for solver steps.
-
-    Attributes:
-        load: Time to load data
-        preprocess: Time to preprocess data
-        optimize: Time to run optimization
-        evaluate: Time to evaluate results
-        save: Time to save results
-        viewer: Time to generate viewer
-        total: Total time for entire solver run
-    """
-    load: float = 0.0
-    preprocess: float = 0.0
-    optimize: float = 0.0
-    evaluate: float = 0.0
-    save: float = 0.0
-    viewer: float = 0.0
-    total: float = 0.0
-
-class SolverEvaluationReport(ABaseModel):
-    """Evaluation metrics for solver results.
-
-    Attributes:
-        reconstruction_error: Average reprojection error
-        constraint_satisfaction: Measure of constraint satisfaction
-        smoothness: Temporal smoothness metric
-        custom_metrics: Dictionary of additional custom metrics
-    """
-    reconstruction_error: float | None = None
-    constraint_satisfaction: float | None = None
-    smoothness: float | None = None
-    custom_metrics: dict[str, Any] = Field(default_factory=dict)
 
 class SolverOptimizationReport(ABaseModel):
     """Summary of optimization results.
@@ -77,426 +30,371 @@ class SolverOptimizationReport(ABaseModel):
     final_cost: float
     cost_reduction: float
 
-class SolverSummary(ABaseModel):
-    """Summary of solver execution.
+    def __str__(self) -> str:
+        """Human-readable optimization report."""
+        status_symbol = "✓" if self.success else "✗"
+        status_text = "Converged" if self.success else "Did not converge"
 
-    Attributes:
-        solver: Name of solver class
-        status: 'complete' or 'incomplete'
-        timing: Timing report
-        evaluation: Evaluation metrics report
-        optimization: Optimization summary report
+        lines = [
+            "Optimization Report:",
+            f"  Status:       {status_symbol} {status_text}",
+            f"  Iterations:   {self.iterations}",
+            f"  Initial cost: {self.initial_cost:.6f}",
+            f"  Final cost:   {self.final_cost:.6f}",
+            f"  Reduction:    {self.cost_reduction:.1f}%"
+        ]
+        return "\n".join(lines)
 
+
+class SolverResult(ABaseModel, ABC):
+    """Base class for solver results.
+
+    Subclasses should implement from_pyceres_summary to create instances
+    specific to their problem type.
     """
-    solver: str
-    status: str
-    timing: SolverTimingReport
-    evaluation: SolverEvaluationReport
-    optimization: SolverOptimizationReport
+    success: bool
+    num_iterations: int
+    initial_cost: float
+    final_cost: float
+    solve_time_seconds: float
+    raw_data: TrajectoryDataset
+    optimized_data: TrajectoryDataset | None = None
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        """Validate and check result - CRASHES if optimization failed.
+
+        Raises:
+            RuntimeError: If optimization did not converge, with detailed debugging info
+        """
+        if not self.success:
+            error_msg = (
+                f"❌ OPTIMIZATION FAILED TO CONVERGE!\n"
+                f"\n"
+                f"Optimization Details:\n"
+                f"  Iterations completed: {self.num_iterations}\n"
+                f"  Initial cost:         {self.initial_cost:.6f}\n"
+                f"  Final cost:           {self.final_cost:.6f}\n"
+                f"  Cost reduction:       {self.cost_reduction_percent:.1f}%\n"
+                f"  Solve time:           {self.solve_time_seconds:.2f}s\n"
+                f"\n"
+                f"This indicates the optimizer could not find a good solution.\n"
+                f"\n"
+                f"Common Causes:\n"
+                f"  1. Bad input data (missing markers, excessive noise)\n"
+                f"  2. Weights too strong (rigid constraints preventing convergence)\n"
+                f"  3. max_iterations too low (increase to 500-1000)\n"
+                f"  4. Poor initial conditions (bad reference geometry)\n"
+                f"  5. Numerical instability (check for NaN/Inf in data)\n"
+                f"\n"
+                f"Debug Steps:\n"
+                f"  1. Check input data quality (plot marker trajectories)\n"
+                f"  2. Reduce constraint weights (lambda_rigid, lambda_smooth)\n"
+                f"  3. Increase max_iterations in OptimizationConfig\n"
+                f"  4. Try with smaller data subset to isolate problem\n"
+                f"  5. Check cost reduction - if very small, may need better initialization"
+            )
+            raise RuntimeError(error_msg)
+        return self
+
+    @property
+    def cost_reduction(self) -> float:
+        """Compute relative cost reduction.
+
+        Returns:
+            Fraction of cost reduced (0-1)
+        """
+        if self.initial_cost == 0.0:
+            return 0.0
+        return (self.initial_cost - self.final_cost) / self.initial_cost
+
+    @property
+    def cost_reduction_percent(self) -> float:
+        """Compute cost reduction percentage.
+
+        Returns:
+            Percentage of cost reduced (0-100)
+        """
+        return self.cost_reduction * 100.0
+
+    @classmethod
+    @abstractmethod
+    def from_pyceres_summary(
+            cls,
+            *,
+            summary: pyceres.SolverSummary,
+            solve_time_seconds: float,
+            raw_data: TrajectoryDataset,
+            **kwargs
+    ) -> Self:
+        """Create result from pyceres SolverSummary.
+
+        Subclasses must implement this to create their specific result type.
+
+        Args:
+            summary: pyceres solver summary
+            solve_time_seconds: Measured solve time
+            raw_data: Original input data
+
+        Returns:
+            SolverResult subclass instance
+        """
+        pass
 
 
 class SolverConfig(ABaseModel):
-    """Base configuration for all solvers.
+    """Configuration for pyceres nonlinear optimization.
 
-    All solver configs inherit from this.
-
-    Attributes:
-        input_path: Path to input data file
-        output_dir: Directory for output files
-        config: Optimization configuration
-        parallel: Parallel processing configuration (optional)
-        metadata: Additional solver-specific metadata
+    Used by ALL pipelines - rigid body tracking, eye tracking, skeleton solving.
     """
-    input_path: Path
-    output_dir: Path
-    config: OptimizationConfig
-    parallel: ChunkingConfig | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    @model_validator(mode='after')
-    def ensure_paths_and_create_output_dir(self) -> 'SolverConfig':
-        """Ensure paths are Path objects and output dir exists."""
-        self.input_path = Path(self.input_path)
-        self.output_dir = Path(self.output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        return self
+    # Convergence criteria
+    max_num_iterations: int = 100
+    function_tolerance: float = 1e-6
+    gradient_tolerance: float = 1e-8
+    parameter_tolerance: float = 1e-7
+
+    linear_solver_type: pyceres.LinearSolverType = pyceres.LinearSolverType.SPARSE_NORMAL_CHOLESKY
+    trust_region_strategy_type: pyceres.TrustRegionStrategyType = pyceres.TrustRegionStrategyType.LEVENBERG_MARQUARDT
+
+    # Loss function (None = no robust loss)
+    loss_function: pyceres.LossFunction | None = Field(default_factory=lambda: pyceres.HuberLoss(2.0))
+
+    # Logging
+    minimizer_progress_to_stdout: bool = True
+
+    def to_solver_options(self) -> pyceres.SolverOptions:
+        """Convert to pyceres SolverOptions."""
+        options = pyceres.SolverOptions()
+        options.max_num_iterations = self.max_num_iterations
+        options.function_tolerance = self.function_tolerance
+        options.gradient_tolerance = self.gradient_tolerance
+        options.parameter_tolerance = self.parameter_tolerance
+        options.linear_solver_type = self.linear_solver_type
+        options.trust_region_strategy_type = self.trust_region_strategy_type
+
+        options.minimizer_progress_to_stdout = self.minimizer_progress_to_stdout
+        return options
+
+    def __str__(self) -> str:
+        """Human-readable solver config."""
+        loss_str = str(type(self.loss_function).__name__) if self.loss_function else "None"
+
+        lines = [
+            "Solver Configuration:",
+            f"  Max iterations:   {self.max_num_iterations}",
+            f"  Function tol:     {self.function_tolerance:.2e}",
+            f"  Gradient tol:     {self.gradient_tolerance:.2e}",
+            f"  Parameter tol:    {self.parameter_tolerance:.2e}",
+            f"  Linear solver:    {self.linear_solver_type.name}",
+            f"  Trust region:     {self.trust_region_strategy_type.name}",
+            f"  Loss function:    {loss_str}",
+            f"  Progress to stdout: {self.minimizer_progress_to_stdout}"
+        ]
+        return "\n".join(lines)
 
 
-class BaseSolver(ABaseModel, ABC):
-    """Abstract base class for all SkellySolver solvers.
+class PyceresSolver(ABaseModel):
+    """Generic pyceres solver wrapper.
 
-    Defines standard solver interface that all solvers must implement.
-    Provides common functionality like timing, logging, and workflow management.
+    Provides high-level interface to pyceres for all pipelines.
+    Handles problem setup, cost addition, and solving.
 
-    Subclasses must implement:
-    - load_data(): Load input data
-    - preprocess_data(): Validate and preprocess
-    - optimize(): Run optimization
-    - evaluate(): Compute metrics
-    - save_results(): Save outputs
-    - generate_viewer(): Create visualization
+    Note: This is a standalone solver that should be created fresh
+    for each chunk in parallel processing.
 
     Usage:
-        class MySolver(BaseSolver):
-            def load_data(self) -> TrajectoryDataset:
-                # Implementation
+        config = SolverConfig(...)
+        solver = PyceresSolver(config=config)
 
-            def preprocess_data(self, *, data: TrajectoryDataset) -> TrajectoryDataset:
-                # Implementation
+        # Add parameters
+        solver.add_parameter_block(name="rotation", parameters=quat)
+        solver.add_quaternion_parameter(name="rotation", parameters=quat)
 
-            # ... implement other methods
+        # Add costs
+        solver.add_residual_block(cost=cost_fn, parameters=[quat, trans])
 
-        config = MySolverConfig(...)
-        solver = MySolver(config=config)
-        result = solver.run()
+        # Solve
+        result = solver.solve()
     """
+
     config: SolverConfig
-    data: TrajectoryDataset | None = None
-    result: OptimizationResult | None = None
-    metrics: SolverEvaluationReport | None = None
-    timing: SolverTimingReport = Field(default_factory=SolverTimingReport)
+    problem: pyceres.Problem = Field(default_factory=pyceres.Problem)
+    parameter_blocks: dict[str, np.ndarray] = Field(default_factory=dict)
 
-
-    def run(self) -> OptimizationResult:
-        """Run complete solver.
-
-        Executes all solver steps in order:
-        1. Load data
-        2. Preprocess
-        3. Optimize
-        4. Evaluate
-        5. Save results
-        6. Generate viewer
-
-        Returns:
-            OptimizationResult with optimization results
-        """
-        logger.info("="*80)
-        logger.info(f"{self.__class__.__name__.upper()} PIPELINE")
-        logger.info("="*80)
-        logger.info(f"Input:  {self.config.input_path}")
-        logger.info(f"Output: {self.config.output_dir}")
-
-        solver_start = time.time()
-
-        # Step 1: Load data
-        step_start = time.time()
-        logger.info("\n" + "="*80)
-        logger.info("STEP 1: LOAD DATA")
-        logger.info("="*80)
-        self.data = self.load_data()
-        self.timing["load"] = time.time() - step_start
-        logger.info(f"  Time: {self.timing['load']:.2f}s")
-
-        # Step 2: Preprocess
-        step_start = time.time()
-        logger.info("\n" + "="*80)
-        logger.info("STEP 2: PREPROCESS DATA")
-        logger.info("="*80)
-        self.data = self.preprocess_data(data=self.data)
-        self.timing["preprocess"] = time.time() - step_start
-        logger.info(f"  Time: {self.timing['preprocess']:.2f}s")
-
-        # Step 3: Optimize
-        step_start = time.time()
-        logger.info("\n" + "="*80)
-        logger.info("STEP 3: OPTIMIZE")
-        logger.info("="*80)
-        self.result = self.optimize(data=self.data)
-        self.timing["optimize"] = time.time() - step_start
-        logger.info(f"  Time: {self.timing['optimize']:.2f}s")
-
-        # Step 4: Evaluate
-        step_start = time.time()
-        logger.info("\n" + "="*80)
-        logger.info("STEP 4: EVALUATE")
-        logger.info("="*80)
-        self.metrics = self.evaluate(result=self.result)
-        self.timing["evaluate"] = time.time() - step_start
-        logger.info(f"  Time: {self.timing['evaluate']:.2f}s")
-
-        # Step 5: Save results
-        step_start = time.time()
-        logger.info("\n" + "="*80)
-        logger.info("STEP 5: SAVE RESULTS")
-        logger.info("="*80)
-        self.save_results(result=self.result, metrics=self.metrics)
-        self.timing["save"] = time.time() - step_start
-        logger.info(f"  Time: {self.timing['save']:.2f}s")
-
-        # Step 6: Generate viewer
-        step_start = time.time()
-        logger.info("\n" + "="*80)
-        logger.info("STEP 6: GENERATE VIEWER")
-        logger.info("="*80)
-        self.generate_viewer(result=self.result)
-        self.timing["viewer"] = time.time() - step_start
-        logger.info(f"  Time: {self.timing['viewer']:.2f}s")
-
-        # Done
-        self.timing["total"] = time.time() - solver_start
-
-        logger.info("\n" + "="*80)
-        logger.info("PIPELINE COMPLETE")
-        logger.info("="*80)
-        logger.info(f"Total time: {self.timing['total']:.2f}s")
-        logger.info(f"  Load:       {self.timing['load']:.2f}s")
-        logger.info(f"  Preprocess: {self.timing['preprocess']:.2f}s")
-        logger.info(f"  Optimize:   {self.timing['optimize']:.2f}s")
-        logger.info(f"  Evaluate:   {self.timing['evaluate']:.2f}s")
-        logger.info(f"  Save:       {self.timing['save']:.2f}s")
-        logger.info(f"  Viewer:     {self.timing['viewer']:.2f}s")
-        logger.info("="*80)
-
-        return self.result
-
-    @abstractmethod
-    def load_data(self) -> TrajectoryDataset:
-        """Load input data from file.
-
-        Must be implemented by subclasses.
-
-        Returns:
-            TrajectoryDataset with loaded data
-        """
-        pass
-
-    @abstractmethod
-    def preprocess_data(self, *, data: TrajectoryDataset) -> TrajectoryDataset:
-        """Preprocess and validate data.
-
-        Must be implemented by subclasses.
-        Typical operations:
-        - Validate required markers present
-        - Filter low-confidence frames
-        - Interpolate missing data
-        - Smooth trajectories
-
-        Args:
-            data: Raw loaded data
-
-        Returns:
-            Preprocessed data
-        """
-        pass
-
-    @abstractmethod
-    def optimize(self, *, data: TrajectoryDataset) -> OptimizationResult:
-        """Run optimization.
-
-        Must be implemented by subclasses.
-        This is the core solver step where pyceres optimization happens.
-
-        Args:
-            data: Preprocessed data
-
-        Returns:
-            OptimizationResult with optimized parameters
-        """
-        pass
-
-    @abstractmethod
-    def evaluate(self, *, result: OptimizationResult) -> SolverSummary:
-        """Evaluate results and compute metrics.
-
-        Must be implemented by subclasses.
-        Typical metrics:
-        - Reconstruction error
-        - Constraint satisfaction
-        - Temporal smoothness
-
-        Args:
-            result: Optimization result
-
-        Returns:
-            Dictionary with metric name -> value
-        """
-        pass
-
-    @abstractmethod
-    def save_results(
-        self,
-        *,
-        result: OptimizationResult,
-        metrics: dict[str, Any]
+    def add_parameter_block(
+            self,
+            *,
+            name: str,
+            parameters: np.ndarray,
+            manifold: pyceres.Manifold | None = None
     ) -> None:
-        """Save results to disk.
-
-        Must be implemented by subclasses.
-        Typical outputs:
-        - CSV with trajectories
-        - JSON with metrics
-        - NPY files with arrays
+        """Add parameter block to optimization problem.
 
         Args:
-            result: Optimization result
-            metrics: Evaluation metrics
+            name: Identifier for this parameter block
+            parameters: Parameter array (will be modified in-place)
+            manifold: Optional manifold constraint
         """
-        pass
+        self.parameter_blocks[name] = parameters
+        self.problem.add_parameter_block(parameters, len(parameters))
 
-    @abstractmethod
-    def generate_viewer(self, *, result: OptimizationResult) -> None:
-        """Generate interactive visualization.
+        if manifold is not None:
+            self.problem.set_manifold(parameters, manifold)
 
-        Must be implemented by subclasses.
-        Typically generates HTML viewer for results.
+        logger.debug(f"Added parameter block '{name}' with {len(parameters)} parameters")
+
+    def add_quaternion_parameter(
+            self,
+            *,
+            name: str,
+            parameters: np.ndarray
+    ) -> None:
+        """Add quaternion parameter with manifold constraint.
+
+        Convenience method for quaternion parameters.
 
         Args:
-            result: Optimization result
+            name: Identifier for this parameter block
+            parameters: (4,) quaternion array
         """
-        pass
+        if len(parameters) != 4:
+            raise ValueError(f"Quaternion must have 4 elements, got {len(parameters)}")
 
-    def get_summary(self) -> dict[str, Any]:
-        """Get solver execution summary.
+        manifold = get_quaternion_manifold()
+        self.add_parameter_block(
+            name=name,
+            parameters=parameters,
+            manifold=manifold
+        )
 
-        Returns:
-            Dictionary with timing, metrics, and status
-        """
-        summary = {
-            "solver": self.__class__.__name__,
-            "status": "complete" if self.result is not None else "incomplete",
-            "timing": self.timing,
-            "metrics": self.metrics,
-        }
-
-        if self.result is not None:
-            summary["optimization"] = {
-                "success": self.result.success,
-                "iterations": self.result.num_iterations,
-                "initial_cost": self.result.initial_cost,
-                "final_cost": self.result.final_cost,
-                "cost_reduction": self.result.cost_reduction_percent,
-            }
-
-        if self.data is not None:
-            summary["data"] = {
-                "n_frames": self.data.n_frames,
-                "n_markers": self.data.n_markers,
-                "marker_names": self.data.marker_names,
-            }
-
-        return summary
-
-    def print_summary(self) -> None:
-        """Print solver summary to console."""
-        summary = self.get_summary()
-
-        print("\n" + "="*80)
-        print(f"{summary['solver']} SUMMARY")
-        print("="*80)
-        print(f"Status: {summary['status']}")
-
-        if "data" in summary:
-            print(f"\nData:")
-            print(f"  Frames:  {summary['data']['n_frames']}")
-            print(f"  Markers: {summary['data']['n_markers']}")
-
-        if "optimization" in summary:
-            print(f"\nOptimization:")
-            print(f"  Success:     {summary['optimization']['success']}")
-            print(f"  Iterations:  {summary['optimization']['iterations']}")
-            print(f"  Cost:        {summary['optimization']['initial_cost']:.2f} → {summary['optimization']['final_cost']:.2f}")
-            print(f"  Reduction:   {summary['optimization']['cost_reduction']:.1f}%")
-
-        if summary["timing"]:
-            print(f"\nTiming:")
-            print(f"  Total:   {summary['timing']['total']:.2f}s")
-            for step, duration in summary["timing"].items():
-                if step != "total":
-                    print(f"  {step.capitalize():12} {duration:.2f}s")
-
-        if summary["metrics"]:
-            print(f"\nMetrics:")
-            for name, value in summary["metrics"].items():
-                if isinstance(value, float):
-                    print(f"  {name}: {value:.4f}")
-                else:
-                    print(f"  {name}: {value}")
-
-        print("="*80)
-
-
-class SolverRunner:
-    """Utility class for running multiple solvers.
-
-    Useful for batch processing or comparing different configurations.
-    """
-
-    def __init__(self) -> None:
-        """Initialize solver runner."""
-        self.solvers: list[BaseSolver] = []
-        self.results: list[OptimizationResult] = []
-
-    def add_solver(self, *, solver: BaseSolver) -> None:
-        """Add solver to run.
+    def add_residual_block(
+            self,
+            *,
+            cost: pyceres.CostFunction,
+            parameters: list[np.ndarray],
+            loss: pyceres.LossFunction | None = None
+    ) -> None:
+        """Add residual block to optimization problem.
 
         Args:
-            solver: Solver instance
+            cost: Cost function
+            parameters: List of parameter arrays used by this cost
+            loss: Optional loss function (uses config default if None)
         """
-        self.solvers.append(solver)
+        if loss is None:
+            loss = self.config.loss_function
 
-    def run_all(self) -> list[OptimizationResult]:
-        """Run all solvers sequentially.
+        self.problem.add_residual_block(cost, loss, parameters)
+
+    def set_parameter_bounds(
+            self,
+            *,
+            parameters: np.ndarray,
+            index: int,
+            lower: float | None = None,
+            upper: float | None = None
+    ) -> None:
+        """Set bounds on a specific parameter.
+
+        Args:
+            parameters: Parameter array
+            index: Index within parameter array
+            lower: Lower bound (None = unbounded)
+            upper: Upper bound (None = unbounded)
+        """
+        if lower is not None:
+            self.problem.set_parameter_lower_bound(parameters, index, lower)
+
+        if upper is not None:
+            self.problem.set_parameter_upper_bound(parameters, index, upper)
+
+    def set_parameter_constant(
+            self,
+            *,
+            parameters: np.ndarray
+    ) -> None:
+        """Set parameter block as constant (not optimized).
+
+        Args:
+            parameters: Parameter array to hold constant
+        """
+        self.problem.set_parameter_block_constant(parameters)
+
+    def get_parameter(self, *, name: str) -> np.ndarray:
+        """Get parameter block by name.
+
+        Args:
+            name: Parameter block identifier
 
         Returns:
-            List of optimization results
+            Parameter array
         """
-        logger.info(f"Running {len(self.solvers)} solvers...")
+        if name not in self.parameter_blocks:
+            raise KeyError(f"Parameter block '{name}' not found")
 
-        for i, solver in enumerate(self.solvers, 1):
-            logger.info(f"\n{'='*80}")
-            logger.info(f"PIPELINE {i}/{len(self.solvers)}")
-            logger.info(f"{'='*80}")
+        return self.parameter_blocks[name]
 
-            result = solver.run()
-            self.results.append(result)
-
-        logger.info(f"\n✓ All solvers complete!")
-        return self.results
-
-    def run_all_parallel(self) -> list[OptimizationResult]:
-        """Run all solvers in parallel.
+    def num_parameters(self) -> int:
+        """Get total number of parameters.
 
         Returns:
-            List of optimization results
+            Number of parameters being optimized
         """
-        import multiprocessing as mp
+        return self.problem.num_parameters()
 
-        logger.info(f"Running {len(self.solvers)} solvers in parallel...")
-
-        def run_solver(solver: BaseSolver) -> OptimizationResult:
-            return solver.run()
-
-        with mp.Pool() as pool:
-            self.results = pool.map(run_solver, self.solvers)
-
-        logger.info(f"\n✓ All solvers complete!")
-        return self.results
-
-    def compare_results(self) -> dict[str, Any]:
-        """Compare results across solvers.
+    def num_residuals(self) -> int:
+        """Get total number of residuals.
 
         Returns:
-            Comparison dictionary
+            Number of residual blocks
         """
-        if not self.results:
-            raise ValueError("No results to compare - run solvers first")
+        return self.problem.num_residual_blocks()
 
-        comparison = {
-            "n_solvers": len(self.results),
-            "success_rate": sum(r.success for r in self.results) / len(self.results),
-            "avg_iterations": sum(r.num_iterations for r in self.results) / len(self.results),
-            "avg_cost_reduction": sum(r.cost_reduction_percent for r in self.results) / len(self.results),
-            "best_solver": None,
-            "worst_solver": None,
-        }
+    def solve(self) -> tuple[pyceres.SolverSummary, float]:
+        """Solve optimization problem and return summary.
 
-        # Find best (lowest final cost)
-        best_idx = min(range(len(self.results)), key=lambda i: self.results[i].final_cost)
-        comparison["best_solver"] = best_idx
+        Pipelines should use the returned summary to create their specific
+        SolverResult subclass via from_pyceres_summary().
 
-        # Find worst (highest final cost)
-        worst_idx = max(range(len(self.results)), key=lambda i: self.results[i].final_cost)
-        comparison["worst_solver"] = worst_idx
+        Returns:
+            Tuple of (summary, solve_time_seconds)
+        """
+        logger.info("=" * 80)
+        logger.info("STARTING OPTIMIZATION")
+        logger.info("=" * 80)
+        logger.info(f"Parameters:      {self.num_parameters()}")
+        logger.info(f"Residual blocks: {self.num_residuals()}")
 
-        return comparison
+        # Configure solver
+        options = self.config.to_solver_options()
+        summary = pyceres.SolverSummary()
+
+        # Solve
+        start_time = time.time()
+        pyceres.solve(options, self.problem, summary)
+        solve_time = time.time() - start_time
+
+        # Log result
+        success = summary.termination_type in [
+            pyceres.TerminationType.CONVERGENCE,
+            pyceres.TerminationType.USER_SUCCESS
+        ]
+
+        logger.info("\n" + "=" * 80)
+        logger.info("OPTIMIZATION COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Status:       {'✓ Converged' if success else '✗ Did not converge'}")
+        logger.info(f"Iterations:   {summary.num_successful_steps}")
+        logger.info(f"Solve time:   {solve_time:.2f}s")
+        logger.info(f"Initial cost: {summary.initial_cost:.6f}")
+        logger.info(f"Final cost:   {summary.final_cost:.6f}")
+
+        cost_reduction = 0.0
+        if summary.initial_cost > 0:
+            cost_reduction = (summary.initial_cost - summary.final_cost) / summary.initial_cost * 100.0
+
+        logger.info(f"Reduction:    {cost_reduction:.1f}%")
+        logger.info("=" * 80)
+
+        return summary, solve_time

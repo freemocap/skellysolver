@@ -3,21 +3,21 @@
   <component name="CsvFileAttributes">
     <option name="attributeMap">
       <map>
+        <entry key="\examples\output\ferret_skeleton_EO5\optimized_trajectory.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\examples\output\ferret_skeleton_EO5\reference_geometry.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\examples\output\ferret_skull_tracking_EO5\trajectory_data.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="\examples\output\ferret_skull_tracking_e15\skull_only.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="\examples\output\ferret_skull_tracking_e15\trajectory_data.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
