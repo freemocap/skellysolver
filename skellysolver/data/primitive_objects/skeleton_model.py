@@ -17,6 +17,7 @@ class Skeleton(ABaseModel):
     segments: list[Segment] = []
     linkages: list[Linkage] = []
     chains: list[Chain] = []
+    tracked_to_keypoint_mapping: dict[str, Keypoint] = {}
 
     @property
     def root(self) -> Keypoint:
@@ -38,8 +39,19 @@ class Skeleton(ABaseModel):
         # Bidirectional validation for linkages <-> chains
         self._validate_no_secret_linkages()
 
+        # Each keypoint has a tracked name mapping
+        self._validate_tracked_keypoint_mapping()
+
+
         return self
 
+    def _validate_tracked_keypoint_mapping(self) -> None:
+        for keypoint in self.keypoints:
+            if not keypoint in list(self.tracked_to_keypoint_mapping.values()):
+                raise ValueError(
+                    f"Keypoint '{keypoint.name}' has no tracked name mapping in "
+                    f"skeleton.tracked_to_keypoint_mapping"
+                )
     def _validate_no_orphaned_keypoints(self) -> None:
         """Ensure every keypoint in skeleton.keypoints is used in at least one segment."""
         keypoints_in_segments: list[Keypoint] = []

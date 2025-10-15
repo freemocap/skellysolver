@@ -23,7 +23,7 @@ def get_quaternion_manifold() -> pyceres.QuaternionManifold:
     Returns:
         pyceres.QuaternionManifold instance
     """
-    return
+    return pyceres.QuaternionManifold()
 
 
 def get_sphere_manifold(*, size: int) -> pyceres.SphereManifold:

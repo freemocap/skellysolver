@@ -14,7 +14,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
-from .data_models import TrajectoryDataset, Trajectory3D, Observation2D
+from .data_models import TrajectoryDataset, TrajectoryND
 
 
 def interpolate_missing(
@@ -62,10 +62,10 @@ def interpolate_missing(
 
 def _interpolate_with_max_gap(
     *,
-    trajectory: Trajectory3D | Observation2D,
+    trajectory: TrajectoryND,
     method: str,
     max_gap: int
-) -> Trajectory3D | Observation2D:
+) -> TrajectoryND:
     """Interpolate trajectory with maximum gap size limit.
     
     Args:
@@ -76,11 +76,11 @@ def _interpolate_with_max_gap(
     Returns:
         Interpolated trajectory
     """
-    positions = trajectory.positions.copy()
-    n_dims = positions.shape[1]
+    values = trajectory.values.copy()
+    n_dims = values.shape[1]
     
     for axis in range(n_dims):
-        data = positions[:, axis]
+        data = values[:, axis]
         
         # Find gaps
         is_valid = ~np.isnan(data)
@@ -109,21 +109,21 @@ def _interpolate_with_max_gap(
                         )
                         
                         gap_indices = np.arange(gap_start, i)
-                        positions[gap_indices, axis] = interp_func(gap_indices)
+                        values[gap_indices, axis] = interp_func(gap_indices)
                 
                 gap_start = None
     
-    if isinstance(trajectory, Trajectory3D):
-        return Trajectory3D(
+
+        return TrajectoryND(
             marker_name=trajectory.marker_name,
-            positions=positions,
+            values=values,
             confidence=trajectory.confidence,
             metadata=trajectory.metadata
         )
     else:
         return Observation2D(
             point_name=trajectory.point_name,
-            positions=positions,
+            values=values,
             confidence=trajectory.confidence,
             metadata=trajectory.metadata
         )
@@ -187,12 +187,12 @@ def smooth_trajectories(
     
     smoothed_data = {}
     for marker_name, traj in dataset.data.items():
-        positions = traj.positions.copy()
-        n_dims = positions.shape[1]
+        values = traj.values.copy()
+        n_dims = values.shape[1]
         
         # Apply filter to each dimension
         for axis in range(n_dims):
-            data = positions[:, axis]
+            data = values[:, axis]
             
             # Only smooth non-NaN regions
             valid_mask = ~np.isnan(data)
@@ -207,24 +207,16 @@ def smooth_trajectories(
                 
                 # Put back
                 data[valid_mask] = smoothed_valid
-                positions[:, axis] = data
+                values[:, axis] = data
         
         # Create smoothed trajectory
-        if isinstance(traj, Trajectory3D):
-            smoothed_data[marker_name] = Trajectory3D(
-                marker_name=marker_name,
-                positions=positions,
-                confidence=traj.confidence,
-                metadata=traj.metadata
-            )
-        else:
-            smoothed_data[marker_name] = Observation2D(
-                point_name=marker_name,
-                positions=positions,
-                confidence=traj.confidence,
-                metadata=traj.metadata
-            )
-    
+        smoothed_data[marker_name] = TrajectoryND(
+            marker_name=marker_name,
+            values=values,
+            confidence=traj.confidence,
+            metadata=traj.metadata
+        )
+
     print("  ✓ Smoothing complete")
     
     return TrajectoryDataset(
@@ -250,8 +242,6 @@ def remove_outliers(
     Returns:
         Dataset with outliers removed (set to NaN)
     """
-    if not dataset.is_3d:
-        raise ValueError("Outlier removal only supported for 3D data")
 
     print(f"Removing outliers (method={method}, threshold={threshold})...")
 
@@ -259,16 +249,15 @@ def remove_outliers(
     n_total_outliers = 0
 
     for marker_name, traj in dataset.data.items():
-        if not isinstance(traj, Trajectory3D):
-            cleaned_data[marker_name] = traj
-            continue
+        if not isinstance(traj, TrajectoryND):
+            raise ValueError(f"Unknown trajectory type for outlier removal: {type(traj)}")
 
-        positions = traj.positions.copy()
-        outlier_mask = np.zeros(len(positions), dtype=bool)
+        values = traj.values.copy()
+        outlier_mask = np.zeros(len(values), dtype=bool)
 
         if method == "velocity":
             # Velocity-based outlier detection using MAD (Median Absolute Deviation)
-            velocities = np.diff(positions, axis=0)
+            velocities = np.diff(values, axis=0)
             speeds = np.linalg.norm(velocities, axis=1)
 
             valid_speeds = speeds[~np.isnan(speeds)]
@@ -311,7 +300,7 @@ def remove_outliers(
         elif method == "position":
             # Position-based outlier detection using MAD
             centroid = traj.get_centroid()
-            distances = np.linalg.norm(positions - centroid, axis=1)
+            distances = np.linalg.norm(values - centroid, axis=1)
 
             valid_distances = distances[~np.isnan(distances)]
             if len(valid_distances) < 2:
@@ -336,13 +325,13 @@ def remove_outliers(
 
             outlier_mask = modified_z_scores > effective_threshold
 
-        # Set outlier positions to NaN
-        positions[outlier_mask] = np.nan
+        # Set outlier values to NaN
+        values[outlier_mask] = np.nan
         n_total_outliers += np.sum(outlier_mask)
 
-        cleaned_data[marker_name] = Trajectory3D(
+        cleaned_data[marker_name] = TrajectoryND(
             marker_name=marker_name,
-            positions=positions,
+            values=values,
             confidence=traj.confidence,
             metadata=traj.metadata
         )
@@ -368,43 +357,42 @@ def center_data(
     Returns:
         Tuple of (centered_dataset, centroid)
     """
-    if not dataset.is_3d:
-        raise ValueError("Centering only supported for 3D data")
-    
+
     print(f"Centering data (method={method})...")
     
     # Compute centroid across all markers and frames
-    all_positions = []
+    all_values = []
     for traj in dataset.data.values():
-        if isinstance(traj, Trajectory3D):
-            valid_pos = traj.get_valid_positions()
-            if len(valid_pos) > 0:
-                all_positions.append(valid_pos)
+        if not isinstance(traj, TrajectoryND):
+            raise ValueError(f"Unknown trajectory type for centering: {type(traj)}")
+        valid_pos = traj.get_valid_values()
+        if len(valid_pos) > 0:
+            all_values.append(valid_pos)
     
-    if not all_positions:
-        raise ValueError("No valid positions to compute centroid")
+    if not all_values:
+        raise ValueError("No valid values to compute centroid")
     
-    all_positions_array = np.concatenate(all_positions, axis=0)
+    all_values_array = np.concatenate(all_values, axis=0)
     
     if method == "mean":
-        centroid = np.mean(all_positions_array, axis=0)
+        centroid = np.mean(all_values_array, axis=0)
     elif method == "median":
-        centroid = np.median(all_positions_array, axis=0)
+        centroid = np.median(all_values_array, axis=0)
     else:
         raise ValueError(f"Unknown centering method: {method}")
     
     # Center each trajectory
     centered_data = {}
     for marker_name, traj in dataset.data.items():
-        if not isinstance(traj, Trajectory3D):
+        if not isinstance(traj, TrajectoryND):
             centered_data[marker_name] = traj
             continue
         
-        centered_positions = traj.positions - centroid
+        centered_values = traj.values - centroid
         
-        centered_data[marker_name] = Trajectory3D(
+        centered_data[marker_name] = TrajectoryND(
             marker_name=marker_name,
-            positions=centered_positions,
+            values=centered_values,
             confidence=traj.confidence,
             metadata=traj.metadata
         )
@@ -423,7 +411,7 @@ def scale_data(
     dataset: TrajectoryDataset,
     scale_factor: float
 ) -> TrajectoryDataset:
-    """Scale all positions by constant factor.
+    """Scale all values by constant factor.
     
     Args:
         dataset: Dataset to scale
@@ -436,23 +424,15 @@ def scale_data(
     
     scaled_data = {}
     for marker_name, traj in dataset.data.items():
-        scaled_positions = traj.positions * scale_factor
+        scaled_values = traj.values * scale_factor
         
-        if isinstance(traj, Trajectory3D):
-            scaled_data[marker_name] = Trajectory3D(
-                marker_name=marker_name,
-                positions=scaled_positions,
-                confidence=traj.confidence,
-                metadata=traj.metadata
-            )
-        else:
-            scaled_data[marker_name] = Observation2D(
-                point_name=marker_name,
-                positions=scaled_positions,
-                confidence=traj.confidence,
-                metadata=traj.metadata
-            )
-    
+        scaled_data[marker_name] = TrajectoryND(
+            marker_name=marker_name,
+            values=scaled_values,
+            confidence=traj.confidence,
+            metadata=traj.metadata
+        )
+
     print("  ✓ Scaling complete")
     
     return TrajectoryDataset(
@@ -484,24 +464,16 @@ def subsample_frames(
     # Subsample each trajectory
     subsampled_data = {}
     for marker_name, traj in dataset.data.items():
-        subsampled_positions = traj.positions[::step]
+        subsampled_values = traj.values[::step]
         subsampled_confidence = traj.confidence[::step] if traj.confidence is not None else None
         
-        if isinstance(traj, Trajectory3D):
-            subsampled_data[marker_name] = Trajectory3D(
-                marker_name=marker_name,
-                positions=subsampled_positions,
-                confidence=subsampled_confidence,
-                metadata=traj.metadata
-            )
-        else:
-            subsampled_data[marker_name] = Observation2D(
-                point_name=marker_name,
-                positions=subsampled_positions,
-                confidence=subsampled_confidence,
-                metadata=traj.metadata
-            )
-    
+        subsampled_data[marker_name] = TrajectoryND(
+            marker_name=marker_name,
+            values=subsampled_values,
+            confidence=subsampled_confidence,
+            metadata=traj.metadata
+        )
+
     n_before = dataset.n_frames
     n_after = len(subsampled_indices)
     

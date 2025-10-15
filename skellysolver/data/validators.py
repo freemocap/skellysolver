@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from .data_models import TrajectoryDataset, Trajectory3D
+from .data_models import TrajectoryDataset, TrajectoryND
 
 
 def validate_dataset(
@@ -180,18 +180,16 @@ def check_spatial_outliers(
     Returns:
         Report dictionary with outlier information
     """
-    if not dataset.is_3d:
-        raise ValueError("Outlier detection only supported for 3D data")
-    
+
     outliers = []
     
     for marker_name, traj in dataset.data.items():
-        if not isinstance(traj, Trajectory3D):
-            continue
+        if not isinstance(traj, TrajectoryND):
+            raise ValueError(f"Unsupported trajectory type for marker '{marker_name}: {type(traj)}'")
         
         # Compute velocities
-        positions = traj.positions
-        velocities = np.diff(positions, axis=0)
+        values = traj.values
+        velocities = np.diff(values, axis=0)
         speeds = np.linalg.norm(velocities, axis=1)
         
         # Detect outliers using z-score
@@ -327,52 +325,6 @@ def validate_topology_compatibility(
     
     return report
 
-
-def suggest_preprocessing(
-    *,
-    dataset: TrajectoryDataset,
-    min_confidence: float = 0.3
-) -> list[str]:
-    """Suggest preprocessing steps based on data quality.
-    
-    Args:
-        dataset: Dataset to analyze
-        min_confidence: Confidence threshold
-        
-    Returns:
-        List of suggested preprocessing steps
-    """
-    suggestions = []
-    
-    # Check validity
-    quality = check_data_quality(dataset=dataset, min_confidence=min_confidence)
-    
-    if quality["percent_fully_valid"] < 80.0:
-        suggestions.append("Filter low-confidence frames (< 80% fully valid)")
-    
-    # Check for missing data
-    for marker_name, validity in quality["marker_validity"].items():
-        if validity["n_missing"] > 0:
-            if validity["percent_valid"] > 50.0:
-                suggestions.append(f"Interpolate missing data for '{marker_name}'")
-            else:
-                suggestions.append(f"Consider removing marker '{marker_name}' (< 50% valid)")
-    
-    # Check for gaps
-    gap_report = check_temporal_gaps(dataset=dataset, min_confidence=min_confidence)
-    if gap_report["has_gaps"]:
-        suggestions.append("Interpolate temporal gaps in data")
-    
-    # Check for outliers
-    if dataset.is_3d:
-        outlier_report = check_spatial_outliers(dataset=dataset, threshold=5.0)
-        if outlier_report["has_outliers"]:
-            suggestions.append("Filter or smooth spatial outliers")
-    
-    if not suggestions:
-        suggestions.append("No preprocessing needed - data quality is good!")
-    
-    return suggestions
 
 
 def print_validation_report(*, report: dict[str, Any]) -> None:

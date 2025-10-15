@@ -14,6 +14,8 @@ import numpy as np
 
 from skellysolver.io.readers.reader_base import BaseReader
 
+import logging
+logger = logging.getLogger(__name__)
 
 class CSVReader(BaseReader):
     """Base class for CSV readers.
@@ -378,3 +380,173 @@ class DLCCSVReader(CSVReader):
         self.last_read_data = result
 
         return result
+
+
+class AutoCSVReader(CSVReader):
+    """Automatic CSV reader that detects format and uses appropriate parser.
+
+    Tries readers in order:
+        1. DeepLabCut (3-row header format)
+        2. Tidy/Long format (frame, keypoint, x, y, z columns)
+        3. Wide format (marker_x, marker_y, marker_z columns)
+
+    Usage:
+        reader = AutoCSVReader()
+        data = reader.read(filepath=Path("data.csv"))
+    """
+
+    min_likelihood: float | None = None
+    default_z: float = 0.0
+
+    def __init__(
+            self,
+            *,
+            min_likelihood: float | None = None,
+            default_z: float = 0.0,
+            encoding: str = 'utf-8'
+    ) -> None:
+        """Initialize auto CSV reader.
+
+        Args:
+            min_likelihood: Minimum likelihood threshold for DLC data
+            default_z: Default z value for 2D data
+            encoding: File encoding
+        """
+        super().__init__()
+        self.min_likelihood = min_likelihood
+        self.default_z = default_z
+        self.encoding = encoding
+
+    def detect_format(self, *, filepath: Path) -> str | None:
+        """Detect CSV format by inspecting header.
+
+        Args:
+            filepath: Path to CSV file
+
+        Returns:
+            Format name ("dlc", "tidy", "wide") or None if unknown
+        """
+        try:
+            # Read first few lines
+            lines = self.read_lines(filepath=filepath, max_lines=5)
+            if len(lines) < 2:
+                return None
+
+            header = self.read_header(filepath=filepath)
+
+            # Check for DLC format (3+ rows, repeating pattern)
+            if len(lines) >= 3:
+                # DLC has bodypart names in row 1 and x,y,likelihood in row 2
+                row2 = lines[1].split(',')
+                row3 = lines[2].split(',')
+
+                # DLC typically has repeated bodypart names and x,y,likelihood pattern
+                if any(coord.strip().lower() in ['x', 'y', 'likelihood'] for coord in row3):
+                    logger.debug("Detected DLC format (3-row header)")
+                    return "dlc"
+
+            # Check for Tidy format (has 'frame', 'keypoint', 'x', 'y' columns)
+            header_lower = [col.lower() for col in header]
+            if ('frame' in header_lower and
+                    'keypoint' in header_lower and
+                    'x' in header_lower and
+                    'y' in header_lower):
+                logger.debug("Detected Tidy format (long format)")
+                return "tidy"
+
+            # Check for Wide format (has columns ending in _x, _y, _z)
+            if any(col.endswith('_x') for col in header):
+                logger.debug("Detected Wide format (wide format)")
+                return "wide"
+
+            return None
+
+        except Exception as e:
+            logger.debug(f"Format detection failed: {e}")
+            return None
+
+    def read(self, *, filepath: Path) -> dict[str, Any]:
+        """Read CSV using automatic format detection.
+
+        Args:
+            filepath: Path to CSV file
+
+        Returns:
+            Dictionary with:
+                - trajectories: dict mapping marker -> (n_frames, 3) array
+                - frame_indices: array of frame numbers
+                - format: detected format name
+                - (optional) confidence: dict mapping marker -> likelihood array
+
+        Raises:
+            ValueError: If no reader could parse the file
+        """
+        self.validate_file(filepath=filepath)
+
+        # Try to detect format first
+        detected_format = self.detect_format(filepath=filepath)
+
+        # Create readers in priority order
+        readers: list[tuple[str, CSVReader]] = []
+
+        if detected_format == "dlc":
+            # Try DLC first if detected
+            readers.append(("DLC", DLCCSVReader(
+                min_likelihood=self.min_likelihood,
+                default_z=self.default_z
+            )))
+            readers.append(("Tidy", TidyCSVReader()))
+            readers.append(("Wide", WideCSVReader(default_z=self.default_z)))
+        elif detected_format == "tidy":
+            # Try Tidy first if detected
+            readers.append(("Tidy", TidyCSVReader()))
+            readers.append(("Wide", WideCSVReader(default_z=self.default_z)))
+            readers.append(("DLC", DLCCSVReader(
+                min_likelihood=self.min_likelihood,
+                default_z=self.default_z
+            )))
+        else:
+            # Default order: Wide, Tidy, DLC
+            readers.append(("Wide", WideCSVReader(default_z=self.default_z)))
+            readers.append(("Tidy", TidyCSVReader()))
+            readers.append(("DLC", DLCCSVReader(
+                min_likelihood=self.min_likelihood,
+                default_z=self.default_z
+            )))
+
+        # Try each reader
+        errors: dict[str, str] = {}
+
+        for reader_name, reader in readers:
+            try:
+                logger.debug(f"Attempting to read with {reader_name} reader...")
+                result = reader.read(filepath=filepath)
+
+                # Success!
+                logger.info(
+                    f"Successfully parsed CSV with {reader_name} reader "
+                    f"({result['n_markers']} markers, {result['n_frames']} frames)"
+                )
+
+                self.last_read_path = filepath
+                self.last_read_data = result
+
+                return result
+
+            except Exception as e:
+                error_msg = str(e)
+                errors[reader_name] = error_msg
+                logger.debug(f"{reader_name} reader failed: {error_msg}")
+                continue
+
+        # All readers failed
+        error_details = "\n".join(f"  - {name}: {err}" for name, err in errors.items())
+        raise ValueError(
+            f"Could not parse CSV file with any reader.\n"
+            f"Tried formats: {', '.join(errors.keys())}\n"
+            f"Errors:\n{error_details}\n\n"
+            f"Supported formats:\n"
+            f"  - Wide: marker_x, marker_y, marker_z columns\n"
+            f"  - Tidy: frame, keypoint, x, y, z columns\n"
+            f"  - DLC: 3-row header with bodyparts and x,y,likelihood"
+        )

@@ -1,59 +1,55 @@
 """Base data structures for all SkellySolver pipelines.
 
 This module provides fundamental data structures used across all pipelines:
-- Trajectory3D: 3D marker trajectories (rigid body tracking)
+- Observation3D: 3D marker trajectories (rigid body tracking)
 - Observation2D: 2D image observations (eye tracking, camera calibration)
 - TrajectoryDataset: Collection of trajectories with metadata
 
 These replace scattered data handling across multiple files.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from pydantic import model_validator, Field
 from typing_extensions import Self
+from scipy.interpolate import interp1d
 
 from skellysolver.data.arbitrary_types_model import ABaseModel
 
 
-class Trajectory3D(ABaseModel):
-    """3D trajectory data for a single marker.
-    
-    Used by rigid body tracking to store marker positions over time.
+
+class TrajectoryND(ABaseModel):
+    """An N-dimensional vector over time.
+
     
     Attributes:
-        marker_name: Identifier for this marker
-        positions: (n_frames, 3) XYZ positions in meters
+        name: Identifier for this marker
+        values: (n_frames, n_dims) values over time
         confidence: Optional (n_frames,) confidence scores [0-1]
         metadata: Optional additional data
     """
     
-    marker_name: str
-    positions: np.ndarray
+    name: str
+    values: np.ndarray
     confidence: np.ndarray | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode='after')
     def validate(self) -> Self:
         """Validate trajectory data."""
-        if self.positions.ndim != 2:
-            raise ValueError(f"Positions must be 2D array, got shape {self.positions.shape}")
-        
-        if self.positions.shape[1] != 3:
-            raise ValueError(f"Positions must have 3 columns (XYZ), got {self.positions.shape[1]}")
-        
+
         if self.confidence is not None:
-            if len(self.confidence) != len(self.positions):
+            if len(self.confidence) != len(self.values):
                 raise ValueError(
-                    f"Confidence length {len(self.confidence)} != positions length {len(self.positions)}"
+                    f"Confidence length {len(self.confidence)} != values length {len(self.values)}"
                 )
         return self
 
     @property
     def n_frames(self) -> int:
         """Number of frames in trajectory."""
-        return len(self.positions)
+        return len(self.values)
     
     def is_valid(self, *, min_confidence: float = 0.3) -> np.ndarray:
         """Get mask of valid frames.
@@ -66,27 +62,27 @@ class Trajectory3D(ABaseModel):
         """
         if self.confidence is None:
             # If no confidence, check for NaN
-            return ~np.isnan(self.positions[:, 0])
+            return ~np.isnan(self.values[:, 0])
         
         # Valid if confidence above threshold AND not NaN
         above_threshold = self.confidence >= min_confidence
-        not_nan = ~np.isnan(self.positions[:, 0])
+        not_nan = ~np.isnan(self.values[:, 0])
         return above_threshold & not_nan
     
-    def get_valid_positions(self, *, min_confidence: float = 0.3) -> np.ndarray:
-        """Get positions for valid frames only.
+    def get_valid_values(self, *, min_confidence: float = 0.3) -> np.ndarray:
+        """Get values for valid frames only.
         
         Args:
             min_confidence: Minimum confidence threshold
             
         Returns:
-            (n_valid, 3) valid positions
+            (n_valid, 3) valid values
         """
         mask = self.is_valid(min_confidence=min_confidence)
-        return self.positions[mask]
+        return self.values[mask]
     
     def get_centroid(self, *, min_confidence: float = 0.3) -> np.ndarray:
-        """Compute centroid of valid positions.
+        """Compute centroid of valid values.
         
         Args:
             min_confidence: Minimum confidence threshold
@@ -94,26 +90,25 @@ class Trajectory3D(ABaseModel):
         Returns:
             (3,) centroid position
         """
-        valid_pos = self.get_valid_positions(min_confidence=min_confidence)
+        valid_pos = self.get_valid_values(min_confidence=min_confidence)
         if len(valid_pos) == 0:
             return np.zeros(3)
         return np.mean(valid_pos, axis=0)
     
     def interpolate_missing(self, *, method: str = "linear") -> "Trajectory3D":
-        """Interpolate missing (NaN) positions.
+        """Interpolate missing (NaN) values.
         
         Args:
             method: Interpolation method ("linear", "cubic")
             
         Returns:
-            New Trajectory3D with interpolated positions
+            New Trajectory3D with interpolated values
         """
-        from scipy.interpolate import interp1d
-        
-        positions_interp = self.positions.copy()
+
+        values_interp = self.values.copy()
         
         for axis in range(3):
-            data = self.positions[:, axis]
+            data = self.values[:, axis]
             valid_mask = ~np.isnan(data)
             
             if np.sum(valid_mask) < 2:
@@ -136,141 +131,32 @@ class Trajectory3D(ABaseModel):
             missing_mask = np.isnan(data)
             if np.any(missing_mask):
                 missing_indices = np.where(missing_mask)[0]
-                positions_interp[missing_indices, axis] = interp_func(missing_indices)
+                values_interp[missing_indices, axis] = interp_func(missing_indices)
         
-        return Trajectory3D(
-            marker_name=self.marker_name,
-            positions=positions_interp,
+        return TrajectoryND(
+            name=self.name,
+            values=values_interp,
             confidence=self.confidence,
             metadata=self.metadata
         )
 
 
-
-class Observation2D(ABaseModel):
-    """2D observation data for a single point.
-    
-    Used by eye tracking and camera calibration to store image points.
-    
-    Attributes:
-        point_name: Identifier for this point
-        positions: (n_frames, 2) UV pixel coordinates
-        confidence: Optional (n_frames,) confidence scores [0-1]
-        metadata: Optional additional data
-    """
-    
-    point_name: str
-    positions: np.ndarray
-    confidence: np.ndarray | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-    @model_validator(mode='after')
-    def validate(self) -> Self:
-        """Validate observation data."""
-        if self.positions.ndim != 2:
-            raise ValueError(f"Positions must be 2D array, got shape {self.positions.shape}")
-        
-        if self.positions.shape[1] != 2:
-            raise ValueError(f"Positions must have 2 columns (UV), got {self.positions.shape[1]}")
-        
-        if self.confidence is not None:
-            if len(self.confidence) != len(self.positions):
-                raise ValueError(
-                    f"Confidence length {len(self.confidence)} != positions length {len(self.positions)}"
-                )
-        return self
-    
-    @property
-    def n_frames(self) -> int:
-        """Number of frames."""
-        return len(self.positions)
-    
-    def is_valid(self, *, min_confidence: float = 0.3) -> np.ndarray:
-        """Get mask of valid frames.
-        
-        Args:
-            min_confidence: Minimum confidence threshold
-            
-        Returns:
-            (n_frames,) boolean mask
-        """
-        if self.confidence is None:
-            return ~np.isnan(self.positions[:, 0])
-        
-        above_threshold = self.confidence >= min_confidence
-        not_nan = ~np.isnan(self.positions[:, 0])
-        return above_threshold & not_nan
-    
-    def get_valid_positions(self, *, min_confidence: float = 0.3) -> np.ndarray:
-        """Get positions for valid frames only.
-        
-        Args:
-            min_confidence: Minimum confidence threshold
-            
-        Returns:
-            (n_valid, 2) valid positions
-        """
-        mask = self.is_valid(min_confidence=min_confidence)
-        return self.positions[mask]
-    
-    def interpolate_missing(self, *, method: str = "linear") -> "Observation2D":
-        """Interpolate missing (NaN) positions.
-        
-        Args:
-            method: Interpolation method ("linear", "cubic")
-            
-        Returns:
-            New Observation2D with interpolated positions
-        """
-        from scipy.interpolate import interp1d
-        
-        positions_interp = self.positions.copy()
-        
-        for axis in range(2):
-            data = self.positions[:, axis]
-            valid_mask = ~np.isnan(data)
-            
-            if np.sum(valid_mask) < 2:
-                continue
-            
-            valid_indices = np.where(valid_mask)[0]
-            valid_values = data[valid_mask]
-            
-            interp_func = interp1d(
-                valid_indices,
-                valid_values,
-                kind=method,
-                bounds_error=False,
-                fill_value="extrapolate"
-            )
-            
-            missing_mask = np.isnan(data)
-            if np.any(missing_mask):
-                missing_indices = np.where(missing_mask)[0]
-                positions_interp[missing_indices, axis] = interp_func(missing_indices)
-        
-        return Observation2D(
-            point_name=self.point_name,
-            positions=positions_interp,
-            confidence=self.confidence,
-            metadata=self.metadata
-        )
 
 
 
 class TrajectoryDataset(ABaseModel):
     """Collection of trajectories or observations with metadata.
     
-    Can contain either 3D trajectories or 2D observations.
+    Can contain either ND trajectories (TrajectoryND)
     Used by all pipelines to manage multiple markers/points.
     
     Attributes:
-        data: Dictionary mapping names to Trajectory3D or Observation2D
+        data: Dictionary mapping names to TrajectoryND instances
         frame_indices: Frame numbers (may not start at 0)
         metadata: Optional dataset-level metadata
     """
     
-    data: dict[str, Trajectory3D | Observation2D]
+    data: dict[str, TrajectoryND]
     frame_indices: np.ndarray
     metadata: dict[str, Any] = Field(default_factory=dict)
     
@@ -306,18 +192,7 @@ class TrajectoryDataset(ABaseModel):
     def n_markers(self) -> int:
         """Number of markers/points."""
         return len(self.data)
-    
-    @property
-    def is_3d(self) -> bool:
-        """Check if dataset contains 3D trajectories."""
-        first_item = next(iter(self.data.values()))
-        return isinstance(first_item, Trajectory3D)
-    
-    @property
-    def is_2d(self) -> bool:
-        """Check if dataset contains 2D observations."""
-        first_item = next(iter(self.data.values()))
-        return isinstance(first_item, Observation2D)
+
     
     def to_array(self, *, marker_names: list[str] | None = None) -> np.ndarray:
         """Convert to numpy array.
@@ -326,7 +201,7 @@ class TrajectoryDataset(ABaseModel):
             marker_names: Optional list of markers to include (default: all)
             
         Returns:
-            (n_frames, n_markers, n_dims) array where n_dims is 3 for 3D, 2 for 2D
+            (n_frames, n_markers, n_dims) array
         """
         if marker_names is None:
             marker_names = self.marker_names
@@ -336,8 +211,8 @@ class TrajectoryDataset(ABaseModel):
         if missing:
             raise ValueError(f"Markers not in dataset: {missing}")
         
-        # Stack positions
-        arrays = [self.data[name].positions for name in marker_names]
+        # Stack values
+        arrays = [self.data[name].values for name in marker_names]
         return np.stack(arrays, axis=1)
     
     def get_valid_frames(
@@ -391,24 +266,16 @@ class TrajectoryDataset(ABaseModel):
         # Filter each trajectory
         filtered_data = {}
         for name, traj in self.data.items():
-            filtered_positions = traj.positions[valid_mask]
+            filtered_values = traj.values[valid_mask]
             filtered_confidence = traj.confidence[valid_mask] if traj.confidence is not None else None
-            
-            if isinstance(traj, Trajectory3D):
-                filtered_data[name] = Trajectory3D(
-                    marker_name=name,
-                    positions=filtered_positions,
-                    confidence=filtered_confidence,
-                    metadata=traj.metadata
-                )
-            else:
-                filtered_data[name] = Observation2D(
-                    point_name=name,
-                    positions=filtered_positions,
-                    confidence=filtered_confidence,
-                    metadata=traj.metadata
-                )
-        
+
+            filtered_data[name] = TrajectoryND(
+                name=name,
+                values=filtered_values,
+                confidence=filtered_confidence,
+                metadata=traj.metadata
+            )
+
         return TrajectoryDataset(
             data=filtered_data,
             frame_indices=self.frame_indices[valid_mask],
@@ -445,7 +312,7 @@ class TrajectoryDataset(ABaseModel):
             "n_frames": self.n_frames,
             "n_markers": self.n_markers,
             "marker_names": self.marker_names,
-            "data_type": "3D" if self.is_3d else "2D",
+            "n_dims": self.data[next(iter(self.data))].values.shape[1] if self.data else 0
         }
         
         # Compute validity statistics

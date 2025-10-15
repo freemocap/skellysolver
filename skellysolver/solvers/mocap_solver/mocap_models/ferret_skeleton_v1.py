@@ -222,4 +222,17 @@ FERRET_SKELETON_V1 = Skeleton(
         THORACIC_LUMBAR_TO_CAUDAL_SPINE,
     ],
     chains=[SPINE_CHAIN],
+    tracked_to_keypoint_mapping={
+        "right_cam_tip": RIGHT_EYE_CAMERA,
+        "left_cam_tip": LEFT_EYE_CAMERA,
+        "base": CAMERA_BASE,
+        "nose": NOSE_TIP,
+        "right_eye": RIGHT_EYE_CENTER,
+        "right_ear": RIGHT_ACOUSTIC_MEATUS,
+        "left_eye": LEFT_EYE_CENTER,
+        "left_ear": LEFT_ACOUSTIC_MEATUS,
+        "spine_t1": SPINE_THORACIC_TOP_T1,
+        "sacrum": PELVIS_SPINE_SACRUM_ORIGIN,
+        "tail_tip": TAIL_TIP,
+    }
 )
