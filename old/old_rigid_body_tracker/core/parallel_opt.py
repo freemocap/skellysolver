@@ -61,7 +61,7 @@ def optimize_single_chunk(
 
     try:
         result = optimize_fn(
-            raw_data=chunk_task.data,
+            noisy_data=chunk_task.data,
             rigid_edges=rigid_edges,
             reference_distances=reference_distances,
             config=optimization_config,
@@ -105,7 +105,7 @@ def optimize_single_chunk(
 
 def optimize_chunked_parallel(
     *,
-    raw_data: np.ndarray,
+    noisy_data: np.ndarray,
     rigid_edges: list[tuple[int, int]],
     reference_distances: np.ndarray,
     optimization_config: 'OptimizationConfig',
@@ -120,7 +120,7 @@ def optimize_chunked_parallel(
     Optimize long recording using parallel processing with soft constraints.
 
     Args:
-        raw_data: (n_frames, n_markers, 3)
+        noisy_data: (n_frames, n_markers, 3)
         rigid_edges: List of rigid edge pairs
         reference_distances: (n_markers, n_markers) initial distance estimates
         optimization_config: OptimizationConfig
@@ -134,7 +134,7 @@ def optimize_chunked_parallel(
     Returns:
         Tuple of (rotations, translations, reconstructed)
     """
-    n_frames, n_markers, _ = raw_data.shape
+    n_frames, n_markers, _ = noisy_data.shape
 
     if n_workers is None:
         n_workers = mp.cpu_count()
@@ -155,7 +155,7 @@ def optimize_chunked_parallel(
     if n_frames <= chunk_config.chunk_size + chunk_config.min_chunk_size:
         logger.info("\nData small enough - optimizing as single chunk")
         result = optimize_fn(
-            raw_data=raw_data,
+            noisy_data=noisy_data,
             rigid_edges=rigid_edges,
             reference_distances=reference_distances,
             config=optimization_config,
@@ -179,7 +179,7 @@ def optimize_chunked_parallel(
     # Create tasks
     tasks = []
     for chunk_id, (global_start, global_end, _, _) in enumerate(chunks):
-        chunk_data = raw_data[global_start:global_end]
+        chunk_data = noisy_data[global_start:global_end]
         tasks.append(ChunkTask(
             chunk_id=chunk_id,
             global_start=global_start,

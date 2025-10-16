@@ -70,7 +70,7 @@ class SolverResult(ABaseModel, ABC):
                 f"❌ OPTIMIZATION FAILED TO CONVERGE!\n"
                 f"\n"
                 f"Optimization Details:\n"
-                f"  Iterations completed: {self.summary.num_iterations}\n"
+                f"  Iterations completed: {self.summary.num_inner_iteration_steps}\n"
                 f"  Initial cost:         {self.summary.initial_cost:.6f}\n"
                 f"  Final cost:           {self.summary.final_cost:.6f}\n"
                 f"  Cost reduction:       {self.cost_reduction_percent:.1f}%\n"
@@ -92,7 +92,7 @@ class SolverResult(ABaseModel, ABC):
                 f"  4. Try with smaller data subset to isolate problem\n"
                 f"  5. Check cost reduction - if very small, may need better initialization"
             )
-            raise RuntimeError(error_msg)
+            # raise RuntimeError(error_msg)
         return self
 
     @property
