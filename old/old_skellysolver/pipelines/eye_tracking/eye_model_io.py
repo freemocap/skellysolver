@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from numpydantic import NDArray, Shape
 
 from python_code.eye_tracking.eye_pyceres_bundle_adjustment import EyeModel
-from old.old_rigid_body_tracker.core.optimization import OptimizationResult
+from old.old_broken_rigid_body_tracker.core.optimization import OptimizationResult
 
 
 class SavedOptimizationResults(BaseModel):

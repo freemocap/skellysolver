@@ -8,7 +8,7 @@ import multiprocessing as mp
 from functools import partial
 import time
 
-from old.old_rigid_body_tracker.core.chunking import (
+from python_code.rigid_body_tracker.core.chunking import (
     ChunkConfig,
     split_into_chunks,
     blend_rotations,
@@ -57,7 +57,7 @@ def optimize_single_chunk(
     start_time = time.time()
 
     # Suppress verbose logging in workers
-    logging.getLogger('old.old_rigid_body_tracker.core.optimization').setLevel(logging.WARNING)
+    logging.getLogger('python_code.rigid_body_tracker.core.optimization').setLevel(logging.WARNING)
 
     try:
         result = optimize_fn(

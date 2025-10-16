@@ -24,6 +24,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="\examples\output\synthetic_cube_keypoint\raw_trajectories.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\examples\output\synthetic_cube_keypoint\trajectories.csv">
           <value>
             <Attribute>
@@ -53,6 +60,20 @@
           </value>
         </entry>
         <entry key="\examples\output\synthetic_demo\trajectory_data.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\raw_trajectories.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\trajectories.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />

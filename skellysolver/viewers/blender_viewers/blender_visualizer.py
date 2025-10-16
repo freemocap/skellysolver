@@ -173,7 +173,7 @@ if __name__ == "__main__":
     # Example configuration
     config = VisualizationConfig(
         rigid_body=RigidBodyConfig(
-            csv_path=Path(
+            trajectories_csv_path=Path(
                 r"C:\Users\jonma\github_repos\jonmatthis\bs\python_code\rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\trajectory_data.csv"
             ),
             topology_path=Path(

@@ -5,10 +5,10 @@ import numpy as np
 import logging
 from scipy.spatial.transform import Rotation
 
-from python_code.rigid_body_tracker.core.topology import RigidBodyTopology
-from python_code.rigid_body_tracker.core.optimization import OptimizationConfig
-from python_code.rigid_body_tracker.api import TrackingConfig, process_tracking_data
-from python_code.rigid_body_tracker.io.savers import save_simple_csv
+from old.old_broken_rigid_body_tracker.core.topology import RigidBodyTopology
+from old.old_broken_rigid_body_tracker.core.optimization import OptimizationConfig
+from old.old_broken_rigid_body_tracker.api import TrackingConfig, process_tracking_data
+from old.old_broken_rigid_body_tracker.io.savers import save_simple_csv
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,6 @@ def run_synthetic_demo() -> None:
         input_csv=output_dir / "input_data.csv",
         topology=topology,
         output_dir=output_dir,
-        scale_factor=1.0,
         optimization=OptimizationConfig(
             max_iter=300,
             lambda_data=100.0,
@@ -186,7 +185,6 @@ def run_synthetic_demo() -> None:
     # Run pipeline
     result = process_tracking_data(
         config=config,
-        ground_truth_data=ground_truth
     )
 
     logger.info("\n" + "="*80)

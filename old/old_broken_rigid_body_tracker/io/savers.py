@@ -7,7 +7,45 @@ import json
 import logging
 import shutil
 
+from skellysolver.data.dataset_manager import save_trajectory_csv
+
 logger = logging.getLogger(__name__)
+
+
+def save_tidy_csv(
+    *,
+    filepath: Path,
+    data: np.ndarray,
+    marker_names: list[str]
+) -> None:
+    """
+    Save trajectory data in tidy/long format.
+
+    Creates CSV with columns: frame, keypoint, x, y, z
+
+    Args:
+        filepath: Output CSV path
+        data: (n_frames, n_markers, 3) trajectory data
+        marker_names: List of marker names
+    """
+    n_frames, n_markers, _ = data.shape
+
+    rows: list[dict[str, int | str | float]] = []
+    for frame_idx in range(n_frames):
+        for marker_idx, marker_name in enumerate(marker_names):
+            x, y, z = data[frame_idx, marker_idx, :]
+            rows.append({
+                'frame': frame_idx,
+                'keypoint': marker_name,
+                'x': float(x),
+                'y': float(y),
+                'z': float(z)
+            })
+
+    df = pd.DataFrame(data=rows)
+    df.to_csv(path_or_buf=filepath, index=False)
+
+    logger.info(f"Saved tidy CSV: {filepath} ({len(df)} rows)")
 
 
 def save_simple_csv(
@@ -41,7 +79,7 @@ def save_simple_csv(
     logger.info(f"Saved simple CSV: {filepath} ({len(df)} frames)")
 
 
-def save_trajectory_csv(
+def old_save_trajectory_csv(
     *,
     filepath: Path,
     noisy_data: np.ndarray,
@@ -158,7 +196,8 @@ def save_results(
 
     Creates:
         output_dir/
-            trajectory_data.csv
+            raw_trajectories.csv (tidy format - original input data)
+            trajectories.csv (tidy format - optimized output data)
             topology.json
             rigid_body_viewer.html  (if copy_viewer=True)
 
@@ -177,13 +216,19 @@ def save_results(
 
     n_frames = noisy_data.shape[0]
 
-    # Save trajectory data
-    save_trajectory_csv(
-        filepath=output_dir / "trajectory_data.csv",
-        noisy_data=noisy_data,
-        optimized_data=optimized_data,
-        marker_names=marker_names,
-        ground_truth_data=ground_truth_data
+
+
+    # Save tidy format CSVs
+    save_tidy_csv(
+        filepath=output_dir / "raw_trajectories.csv",
+        data=noisy_data,
+        marker_names=marker_names
+    )
+
+    save_tidy_csv(
+        filepath=output_dir / "trajectories.csv",
+        data=optimized_data,
+        marker_names=marker_names
     )
 
     # Save topology with soft edges
@@ -220,7 +265,7 @@ def save_results(
         else:
             logger.warning("Viewer HTML not found, skipping copy")
 
-    logger.info(f"\n✓ Results saved to: {output_dir}")
+    logger.info(f"\n Results saved to: {output_dir}")
     logger.info(f"  Open {output_dir / 'rigid_body_viewer.html'} to visualize")
 
 

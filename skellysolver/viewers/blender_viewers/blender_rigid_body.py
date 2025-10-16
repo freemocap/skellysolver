@@ -16,7 +16,7 @@ from mathutils import Vector
 
 
 @dataclass
-class TidyTrajectoryData:
+class TrajectoryData:
     """Ergonomic trajectory data for Blender visualization."""
 
     frames: list[dict[str, tuple[float, float, float]]]
@@ -38,15 +38,17 @@ class TidyTrajectoryData:
 @dataclass
 class RigidBodyConfig:
     """Configuration for rigid body visualization."""
+    base_path: Path
+    """Base path for data files, use to construct other paths if not provided"""
 
-    csv_path: Path
-    """Path to trajectory_data.csv (tidy format)"""
+    trajectories_csv_path: Path | None = None
+    """Path to trajectory.csv (tidy format)"""
 
-    topology_path: Path
+    topology_path: Path | None = None
     """Path to topology.json"""
 
-    raw_csv_path: Path | None = None
-    """Path to raw_trajectory.csv (optional, same format as trajectory_data.csv)"""
+    raw_trajectories_csv_path: Path  | None = None
+    """Path to raw_trajectory.csv """
 
     data_scale: float = 1.0
     """Scale factor for data (e.g. 0.001 for mm to meters)"""
@@ -78,7 +80,7 @@ class RigidBodyConfig:
     raw_edge_color: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.5)
     """RGBA color for raw data trajectory connections (semi-transparent red)"""
 
-    show_rigid_edges: bool = False
+    show_rigid_edges: bool = True
     """Show rigid constraint edges"""
 
     show_soft_edges: bool = True
@@ -90,7 +92,7 @@ class RigidBodyConfig:
     show_raw_data: bool = True
     """Show raw data markers"""
 
-    show_raw_connections: bool = True
+    show_trajecotories: bool = False
     """Show connections between consecutive raw data points"""
 
     frame_start: int = 0
@@ -99,6 +101,13 @@ class RigidBodyConfig:
     keyframe_step: int = 1
     """Keyframe every N frames (1=all frames, 2=every other, etc.)"""
 
+    def __post_init__(self):
+        if not self.trajectories_csv_path:
+            self.trajectories_csv_path = self.base_path / "trajectories.csv"
+        if not self.topology_path:
+            self.topology_path = self.base_path / "topology.json"
+        if not self.raw_trajectories_csv_path:
+            self.raw_trajectories_csv_path = self.base_path / "raw_trajectories.csv"
 
 # ============================================================================
 # DATA LOADING
@@ -109,7 +118,7 @@ def load_tidy_csv(
     *,
     filepath: Path,
     data_scale: float = 1.0
-) -> TidyTrajectoryData:
+) -> TrajectoryData:
     """
     Load trajectory data from tidy CSV format.
 
@@ -141,7 +150,7 @@ def load_tidy_csv(
             keypoint = row['keypoint']
             x = float(row['x']) * data_scale
             y = float(row['y']) * data_scale
-            z = (float(row['z']) if 'z' in row and row['z'] else 0.0) * data_scale
+            z =(float(row['z']) if 'z' in row and row['z'] else 0.0) * data_scale
 
             frame_set.add(frame)
 
@@ -176,7 +185,7 @@ def load_tidy_csv(
 
     print(f"✓ Loaded trajectory data in tidy format")
 
-    return TidyTrajectoryData(
+    return TrajectoryData(
         frames=frames,
         marker_names=marker_names,
         frame_indices=frame_indices,
@@ -473,7 +482,7 @@ def create_rigid_body_visualization(
     *,
     config: RigidBodyConfig,
     parent_name: str = "RigidBody"
-) -> tuple[bpy.types.Object, dict[str, bpy.types.Object], TidyTrajectoryData, dict[str, object]]:
+) -> tuple[bpy.types.Object, dict[str, bpy.types.Object], TrajectoryData, dict[str, object]]:
     """
     Create rigid body marker visualization.
 
@@ -494,16 +503,16 @@ def create_rigid_body_visualization(
 
     print("\nLoading trajectory data...")
     traj_data = load_tidy_csv(
-        filepath=config.csv_path,
+        filepath=config.trajectories_csv_path,
         data_scale=config.data_scale
     )
 
     # Load raw data if provided
-    raw_traj_data: TidyTrajectoryData | None = None
-    if config.raw_csv_path and config.show_raw_data:
+    raw_traj_data: TrajectoryData | None = None
+    if config.raw_trajectories_csv_path and config.show_raw_data:
         print("\nLoading raw trajectory data...")
         raw_traj_data = load_tidy_csv(
-            filepath=config.raw_csv_path,
+            filepath=config.raw_trajectories_csv_path,
             data_scale=config.data_scale
         )
 
@@ -589,7 +598,7 @@ def create_rigid_body_visualization(
             marker_names=traj_data.marker_names,
             markers=markers,
             initial_positions=traj_data.frames[0],
-            radius=config.tube_radius,
+            radius=config.tube_radius/2,
             material=rigid_edge_mat,
             parent=parent
         )
@@ -621,20 +630,20 @@ def create_rigid_body_visualization(
         )
 
     # Create raw data trajectory connections
-    if raw_traj_data and config.show_raw_data and config.show_raw_connections:
-        print(f"\nCreating raw data trajectory connections...")
-        for marker_name in raw_traj_data.marker_names:
-            trajectory = [raw_traj_data.frames[f][marker_name] for f in range(raw_traj_data.n_frames)]
-            create_trajectory_curves(
-                name="RawTrail",
-                marker_name=marker_name,
-                trajectory=trajectory,
-                radius=config.raw_tube_radius,
-                material=raw_edge_mat,
-                parent=parent,
-                frame_start=config.frame_start,
-                keyframe_step=config.keyframe_step
-            )
+    # if raw_traj_data and config.show_raw_data and config.show_trajecotories:
+    #     print(f"\nCreating raw data trajectory connections...")
+    #     for marker_name in raw_traj_data.marker_names:
+    #         trajectory = [raw_traj_data.frames[f][marker_name] for f in range(raw_traj_data.n_frames)]
+    #         create_trajectory_curves(
+    #             name="RawTrail",
+    #             marker_name=marker_name,
+    #             trajectory=trajectory,
+    #             radius=config.raw_tube_radius,
+    #             material=raw_edge_mat,
+    #             parent=parent,
+    #             frame_start=config.frame_start,
+    #             keyframe_step=config.keyframe_step
+    #         )
 
     # Animate markers
     print(f"\nAnimating markers...")
@@ -674,25 +683,17 @@ def create_rigid_body_visualization(
 
 # Example usage
 config = RigidBodyConfig(
-    csv_path=Path(
-        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\trajectories.csv"
-    ),
-    topology_path=Path(
-        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\topology.json"
-    ),
-    raw_csv_path=Path(
-        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\raw_trajectories.csv"
-    ),
+    base_path =Path(
+        r"/old/old_broken_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s"),
     data_scale=0.001,  # mm to meters
     sphere_radius=0.003,
     tube_radius=0.001,
-    raw_sphere_radius=0.002,  # Smaller for raw data
-    raw_tube_radius=0.0008,  # Thinner connections
+    raw_sphere_radius=0.002,
+    raw_tube_radius=0.0008,
     show_rigid_edges=False,
     show_soft_edges=True,
     show_display_edges=True,
     show_raw_data=True,
-    show_raw_connections=True,
     frame_start=0,
     keyframe_step=3,
 )

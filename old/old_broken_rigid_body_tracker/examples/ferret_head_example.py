@@ -4,11 +4,11 @@ from pathlib import Path
 import logging
 import numpy as np
 
-from python_code.rigid_body_tracker.core.topology import RigidBodyTopology
-from python_code.rigid_body_tracker.core.optimization import OptimizationConfig
-from python_code.rigid_body_tracker.api import TrackingConfig, process_tracking_data
-from python_code.rigid_body_tracker.io.loaders import load_trajectories
-from python_code.rigid_body_tracker.io.savers import save_results
+from old.old_broken_rigid_body_tracker.core.topology import RigidBodyTopology
+from old.old_broken_rigid_body_tracker.core.optimization import OptimizationConfig
+from old.old_broken_rigid_body_tracker.api import TrackingConfig, process_tracking_data
+from old.old_broken_rigid_body_tracker.io.loaders import load_trajectories
+from old.old_broken_rigid_body_tracker.io.savers import save_results
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def attach_raw_spine_markers(
     return combined_data, combined_names
 
 
-def run_ferret_tracking_skull_only() -> None:
+def run_ferret_skull_solver() -> None:
     """Run ferret tracking: optimize SKULL only, attach raw spine."""
 
     logging.basicConfig(
@@ -118,18 +118,20 @@ def run_ferret_tracking_skull_only() -> None:
     # =========================================================================
     # STEP 1: LOAD ALL DATA
     # =========================================================================
-    # input_csv = Path(
-    #     r"D:\bs\ferret_recordings\session_2025-07-01_ferret_757_EyeCameras_P33_EO5"
-    #     r"\clips\1m_20s-2m_20s\mocap_data\output_data\processed_data"
-    #     r"\head_spine_body_rigid_3d_xyz.csv"
-    # )
     input_csv = Path(
-        r"D:\bs\ferret_recordings\2025-07-11_ferret_757_EyeCameras_P43_E15__1\clips\0m_37s-1m_37s\mocap_data\output_data\output_data_head_body_eyecam_retrain_test_v2_model_outputs_iteration_1\dlc\dlc_body_rigid_3d_xyz.csv"
+        r"D:\bs\ferret_recordings\session_2025-07-01_ferret_757_EyeCameras_P33_EO5"
+        r"\clips\1m_20s-2m_20s\mocap_data\output_data\processed_data"
+        r"\head_spine_body_rigid_3d_xyz.csv"
     )
+    # input_csv = Path(
+    #     r"D:\bs\ferret_recordings\2025-07-11_ferret_757_EyeCameras_P43_E15__1"
+    #     r"\clips\0m_37s-1m_37s\mocap_data\output_data"
+    #     r"\output_data_head_body_eyecam_retrain_test_v2_model_outputs_iteration_1\dlc\dlc_body_rigid_3d_xyz.csv"
+    # )
 
     logger.info(f"\nLoading data from: {input_csv.name}")
 
-    trajectory_dict = load_trajectories(
+    raw_trajectory_dict = load_trajectories(
         filepath=input_csv,
         scale_factor=1.0,
         z_value=0.0
@@ -147,7 +149,7 @@ def run_ferret_tracking_skull_only() -> None:
 
     # Extract spine data (keep as raw measurements)
     raw_spine_data = np.stack(
-        arrays=[trajectory_dict[name] for name in spine_marker_names],
+        arrays=[raw_trajectory_dict[name] for name in spine_marker_names],
         axis=1
     )
 
@@ -164,7 +166,8 @@ def run_ferret_tracking_skull_only() -> None:
     config = TrackingConfig(
         input_csv=input_csv,
         topology=skull_topology,
-        output_dir=Path("output/ferret_skull_only_raw_spine_e05"),
+        # output_dir=Path("output/2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s"),
+        output_dir=Path("output/2025-07-01_ferret_757_EyeCameras_P33_EO5_1m_20s-2m_20s"),
         optimization=OptimizationConfig(
             max_iter=100,
             lambda_data=100.0,       # Fit to measurements
@@ -210,7 +213,7 @@ def run_ferret_tracking_skull_only() -> None:
     # Get noisy data for all markers (skull + spine)
     all_marker_names = skull_marker_names + spine_marker_names
     noisy_all = np.stack(
-        arrays=[trajectory_dict[name] for name in all_marker_names],
+        arrays=[raw_trajectory_dict[name] for name in all_marker_names],
         axis=1
     )
 
@@ -236,7 +239,7 @@ def run_ferret_tracking_skull_only() -> None:
 
     # Create combined topology for visualization
     combined_topology = {
-        "name": "ferret_skull_rigid_spine_raw",
+        "name": "ferret_skull_plus_raw_spine",
         "marker_names": combined_names,
         "rigid_edges": skull_topology.rigid_edges,  # Only skull edges are rigid
         "display_edges": display_edges_combined,
@@ -264,4 +267,4 @@ def run_ferret_tracking_skull_only() -> None:
 
 
 if __name__ == "__main__":
-    run_ferret_tracking_skull_only()
+    run_ferret_skull_solver()
