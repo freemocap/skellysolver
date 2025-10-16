@@ -125,8 +125,8 @@ config = OptimizationConfig(
 optimizer = Optimizer(config=config)
 
 # Add parameters (quaternions automatically get manifold)
-optimizer.add_quaternion_parameter(name="rotation_1", parameters=quat_1)
-optimizer.add_quaternion_parameter(name="rotation_2", parameters=quat_2)
+optimizer.add_quaternion_parameter(name="rotation_1", parameter=quat_1)
+optimizer.add_quaternion_parameter(name="rotation_2", parameter=quat_2)
 
 # Add costs
 rot_cost = RotationSmoothnessCost(weight=100.0)
@@ -160,7 +160,7 @@ optimizer = Optimizer(config=config)
 for frame_idx in range(n_frames):
     optimizer.add_quaternion_parameter(
         name=f"rotation_{frame_idx}",
-        parameters=rotations[frame_idx]
+        parameter=rotations[frame_idx]
     )
     optimizer.add_parameter_block(
         name=f"translation_{frame_idx}",
@@ -220,7 +220,7 @@ optimizer = Optimizer(config=config)
 for frame_idx in range(n_frames):
     optimizer.add_quaternion_parameter(
         name=f"eye_rotation_{frame_idx}",
-        parameters=eye_rotations[frame_idx]
+        parameter=eye_rotations[frame_idx]
     )
 
 # Add pupil dilation parameters
@@ -381,8 +381,8 @@ def test_optimizer_basic():
     quat_1 = np.array([1.0, 0.0, 0.0, 0.0])
     quat_2 = np.array([0.9, 0.1, 0.0, 0.0])
 
-    optimizer.add_quaternion_parameter(name="q1", parameters=quat_1)
-    optimizer.add_quaternion_parameter(name="q2", parameters=quat_2)
+    optimizer.add_quaternion_parameter(name="q1", parameter=quat_1)
+    optimizer.add_quaternion_parameter(name="q2", parameter=quat_2)
 
     # Add cost
     cost = RotationSmoothnessCost(weight=100.0)

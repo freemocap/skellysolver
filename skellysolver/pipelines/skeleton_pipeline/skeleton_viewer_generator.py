@@ -48,7 +48,7 @@ class SkeletonViewerData:
             # Add raw data
             for kp_name in self.topology.keypoint_names:
                 if kp_name in self.raw_data.data:
-                    pos = self.raw_data.data[kp_name].values[frame_idx]
+                    pos = self.raw_data.data[kp_name].data[frame_idx]
                     frame_dict[f"raw_{kp_name}_x"] = float(pos[0])
                     frame_dict[f"raw_{kp_name}_y"] = float(pos[1])
                     frame_dict[f"raw_{kp_name}_z"] = float(pos[2])
@@ -57,7 +57,7 @@ class SkeletonViewerData:
             if self.optimized_data is not None:
                 for kp_name in self.topology.keypoint_names:
                     if kp_name in self.optimized_data.data:
-                        pos = self.optimized_data.data[kp_name].values[frame_idx]
+                        pos = self.optimized_data.data[kp_name].data[frame_idx]
                         frame_dict[f"optimized_{kp_name}_x"] = float(pos[0])
                         frame_dict[f"optimized_{kp_name}_y"] = float(pos[1])
                         frame_dict[f"optimized_{kp_name}_z"] = float(pos[2])
@@ -66,7 +66,7 @@ class SkeletonViewerData:
             if self.ground_truth_data is not None:
                 for kp_name in self.topology.keypoint_names:
                     if kp_name in self.ground_truth_data.data:
-                        pos = self.ground_truth_data.data[kp_name].values[frame_idx]
+                        pos = self.ground_truth_data.data[kp_name].data[frame_idx]
                         frame_dict[f"gt_{kp_name}_x"] = float(pos[0])
                         frame_dict[f"gt_{kp_name}_y"] = float(pos[1])
                         frame_dict[f"gt_{kp_name}_z"] = float(pos[2])

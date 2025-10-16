@@ -9,7 +9,7 @@ from typing import Generic, TypeVar
 import numpy as np
 
 from skellysolver.utilities.arbitrary_types_model import ABaseModel
-from skellysolver.solvers.costs.constraint_costs import CostCollection
+from skellysolver.solvers.costs.cost_info_models import CostCollection
 from skellysolver.solvers.constraints.base_constraint import BaseConstraint
 
 # Generic type for the constraint being built from

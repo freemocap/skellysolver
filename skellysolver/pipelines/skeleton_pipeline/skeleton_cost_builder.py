@@ -22,9 +22,10 @@ import numpy as np
 import pyceres
 from itertools import combinations
 
+from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline_config import SkeletonPipelineConfig
 from skellysolver.solvers.base_cost_builder import BaseCostBuilder
 from skellysolver.solvers.constraints.skeleton_constraint import SkeletonConstraint
-from skellysolver.solvers.costs.constraint_costs import (
+from skellysolver.solvers.costs.cost_info_models import (
     SegmentRigidityCostInfo,
     LinkageStiffnessCostInfo,
     TranslationSmoothnessCostInfo,
@@ -33,6 +34,7 @@ from skellysolver.solvers.costs.constraint_costs import (
     AnchorCostInfo
 )
 from skellysolver.data.trajectory_dataset import TrajectoryDataset
+from skellysolver.solvers.costs.edge_costs import RigidEdgeCost
 from skellysolver.utilities.arbitrary_types_model import ABaseModel
 
 logger = logging.getLogger(__name__)
@@ -129,7 +131,7 @@ class DistanceAnchorCost(pyceres.CostFunction):
         self,
         *,
         initial_distance: float,
-        weight: float = 1.0
+        weight: float
     ) -> None:
         super().__init__()
         self.initial_distance = initial_distance
@@ -171,8 +173,8 @@ class DistanceLowerBoundCost(pyceres.CostFunction):
     def __init__(
         self,
         *,
-        min_distance: float = 0.01,
-        weight: float = 1000.0
+        min_distance: float,
+        weight: float
     ) -> None:
         super().__init__()
         self.min_distance = min_distance
@@ -269,67 +271,19 @@ class DirectKeypointSmoothnessCost(pyceres.CostFunction):
 
 
 class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
-    """Build costs for bundle adjustment: optimize positions AND distances.
-
-    This builder creates a joint optimization problem where both:
-    1. Keypoint positions over time
-    2. Target distances between constrained keypoints
-
-    are optimized simultaneously.
-
-    Usage:
-        builder = SkeletonBundleAdjustmentCostBuilder(constraint=skeleton)
-
-        result = builder.build_all_costs(
-            positions=positions,  # (n_frames, n_keypoints, 3) - will be optimized
-            input_data=measurements,
-            config=config
-        )
-
-        # Add position parameters
-        for frame, kp in product(frames, keypoints):
-            solver.add_parameter_block(
-                name=f"pos_{frame}_{kp}",
-                parameters=positions[frame, kp]
-            )
-
-        # Add distance parameters (NEW!)
-        for (kp_i, kp_j), distance_param in result.distance_parameters.items():
-            solver.add_parameter_block(
-                name=f"dist_{kp_i}_{kp_j}",
-                parameters=distance_param
-            )
-
-        # Add all costs
-        for cost_info in result.costs.costs:
-            solver.add_residual_block(
-                cost=cost_info.cost,
-                parameters=cost_info.parameters
-            )
-    """
-
     @property
     def skeleton(self) -> SkeletonConstraint:
         return self.constraint
 
-    def get_keypoint_index(self, *, keypoint_name: str) -> int:
-        for i, kp in enumerate(self.skeleton.keypoints):
-            if kp.name == keypoint_name:
-                return i
-        raise ValueError(f"Keypoint '{keypoint_name}' not found")
 
-    def _initialize_distance_parameters(
+
+    def _initialize_segment_lengths(
         self,
         *,
         input_data: TrajectoryDataset,
-        min_confidence: float = 0.3
+        min_confidence: float,
+        segment_rigidity_threshold: float
     ) -> tuple[dict[tuple[str, str], np.ndarray], dict[tuple[str, str], float]]:
-        """Initialize distance parameters from input data.
-
-        Returns:
-            distance_params: Dict of (kp_i, kp_j) -> 1D array [distance]
-            initial_distances: Dict of (kp_i, kp_j) -> initial distance value
-        """
         distance_params: dict[tuple[str, str], np.ndarray] = {}
         initial_distances: dict[tuple[str, str], float] = {}
 
@@ -338,23 +292,18 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
 
         # From segments
         for segment in self.skeleton.segments:
+            if segment.rigidity < segment_rigidity_threshold:
+                continue
             keypoint_names = [segment.parent.name] + [kp.name for kp in segment.children]
             for name_i, name_j in combinations(keypoint_names, 2):
                 pair = tuple(sorted([name_i, name_j]))
                 constrained_pairs.add(pair)
 
-        # From linkages
-        for linkage in self.skeleton.linkages:
-            parent_names = [linkage.parent.parent.name] + [kp.name for kp in linkage.parent.children]
-            for child_segment in linkage.children:
-                child_names = [child_segment.parent.name] + [kp.name for kp in child_segment.children]
-                for p_name in parent_names:
-                    for c_name in child_names:
-                        pair = tuple(sorted([p_name, c_name]))
-                        constrained_pairs.add(pair)
+
 
         # Initialize each distance parameter
-        for name_i, name_j in constrained_pairs:
+        for pair in constrained_pairs:
+            name_i, name_j = pair
             traj_i = input_data.data[name_i]
             traj_j = input_data.data[name_j]
 
@@ -365,14 +314,13 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
 
             if not np.any(valid_both):
                 logger.warning(f"No valid frames for pair ({name_i}, {name_j})")
-                # Use default
-                initial_dist = 1.0
+                continue
             else:
                 # Compute median distance from data
                 distances = []
                 for frame_idx in np.where(valid_both)[0]:
-                    pos_i = traj_i.values[frame_idx]
-                    pos_j = traj_j.values[frame_idx]
+                    pos_i = traj_i.data[frame_idx]
+                    pos_j = traj_j.data[frame_idx]
                     dist = np.linalg.norm(pos_i - pos_j)
                     distances.append(dist)
                 initial_dist = float(np.median(distances))
@@ -388,54 +336,87 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
 
         return distance_params, initial_distances
 
-    def build_segment_rigidity_costs(
+    def build_segment_rigidity_costs_target_segment_lengths(
         self,
         *,
         positions: np.ndarray,
-        distance_parameters: dict[tuple[str, str], np.ndarray],
-        rigidity_threshold: float = 0.5,
-        base_weight: float = 500.0
+        target_lengths: dict[tuple[str, str], float],
+        base_weight: float
     ) -> list[SegmentRigidityCostInfo]:
         """Build rigidity costs with optimized distances."""
         costs: list[SegmentRigidityCostInfo] = []
         n_frames = positions.shape[0]
 
-        for segment in self.skeleton.segments:
-            if segment.rigidity < rigidity_threshold:
-                continue
+        for segment_pair, target_length in target_lengths.items():
+            name_i, name_j = segment_pair
+            idx_i = self.skeleton.get_keypoint_index(keypoint_name=name_i)
+            idx_j = self.skeleton.get_keypoint_index(keypoint_name=name_j)
+            weight = base_weight # * segment.rigidity # don't scale by rigidity, for now
 
-            keypoint_names = [segment.parent.name] + [kp.name for kp in segment.children]
+            # Add cost for each frame
+            for frame_idx in range(n_frames):
+                cost = RigidEdgeCost(marker_i=1,
+                                        marker_j=1,
+                                        target_distance=target_length,
+                                        weight=weight,
+                                     )
 
-            for name_i, name_j in combinations(keypoint_names, 2):
-                pair = tuple(sorted([name_i, name_j]))
+                cost_info = SegmentRigidityCostInfo(
+                    cost=cost,
+                    parameters=[
+                        positions[frame_idx, idx_i],
+                        positions[frame_idx, idx_j],
+                    ],
+                    segment_name=f"{name_i}-{name_j}",
+                    keypoint_i=name_i,
+                    keypoint_j=name_j,
+                    rigidity=1.0,  # Placeholder, all segments treated equally for now
+                    target_distance=float(target_length),  #  target distance
+                    weight=weight,
+                )
+                costs.append(cost_info)
 
-                if pair not in distance_parameters:
-                    continue
+        return costs
 
-                distance_param = distance_parameters[pair]
-                idx_i = self.get_keypoint_index(keypoint_name=name_i)
-                idx_j = self.get_keypoint_index(keypoint_name=name_j)
-                weight = base_weight * segment.rigidity
 
-                # Add cost for each frame (all share same distance parameter!)
-                for frame_idx in range(n_frames):
-                    cost = OptimizedDistanceRigidEdgeCost(weight=weight)
+    def build_segment_rigidity_costs_optimized_segment_lengths(
+        self,
+        *,
+        positions: np.ndarray,
+        distance_parameters: dict[tuple[str, str], np.ndarray],
+        base_weight: float
+    ) -> list[SegmentRigidityCostInfo]:
+        """Build rigidity costs with optimized distances."""
+        costs: list[SegmentRigidityCostInfo] = []
+        n_frames = positions.shape[0]
 
-                    cost_info = SegmentRigidityCostInfo(
-                        cost=cost,
-                        parameters=[
-                            positions[frame_idx, idx_i],
-                            positions[frame_idx, idx_j],
-                            distance_param  # Shared distance parameter!
-                        ],
-                        segment_name=segment.name,
-                        keypoint_i=name_i,
-                        keypoint_j=name_j,
-                        rigidity=segment.rigidity,
-                        target_distance=distance_param[0],  # Current value
-                        weight=weight
-                    )
-                    costs.append(cost_info)
+        for segment_pair in distance_parameters.keys():
+            name_i, name_j = segment_pair
+            distance_param = distance_parameters[segment_pair]
+            idx_i = self.skeleton.get_keypoint_index(keypoint_name=name_i)
+            idx_j = self.skeleton.get_keypoint_index(keypoint_name=name_j)
+            weight = base_weight # * segment.rigidity # don't scale by rigidity, for now
+
+            # Add cost for each frame (note - all frames share same distance parameter!)
+            for frame_idx in range(n_frames):
+                cost = OptimizedDistanceRigidEdgeCost(weight=weight)
+
+                cost_info = SegmentRigidityCostInfo(
+                    cost=cost,
+                    parameters=[
+                        positions[frame_idx, idx_i],
+                        positions[frame_idx, idx_j],
+                        distance_param  # Shared distance parameter!
+                    ],
+                    segment_name=f"{name_i}-{name_j}",
+                    keypoint_i=name_i,
+                    keypoint_j=name_j,
+                    rigidity=1.0,  # Placeholder, all segments treated equally for now
+                    target_distance=float(distance_param[0]),  # Current target distance
+                    weight=weight,
+                    description=f"Rigidity cost for segment ({name_i}, {name_j})"
+                )
+                costs.append(cost_info)
 
         return costs
 
@@ -498,7 +479,7 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
         *,
         distance_parameters: dict[tuple[str, str], np.ndarray],
         initial_distances: dict[tuple[str, str], float],
-        anchor_weight: float = 1.0
+        anchor_weight: float
     ) -> list[AnchorCostInfo]:
         """Build anchor costs for distance parameters.
 
@@ -528,8 +509,8 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
         self,
         *,
         distance_parameters: dict[tuple[str, str], np.ndarray],
-        min_distance: float = 0.01,
-        bound_weight: float = 1000.0
+        min_distance_ratio: float,
+        bound_weight: float
     ) -> list[AnchorCostInfo]:
         """Build lower bound costs for distances.
 
@@ -539,7 +520,7 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
 
         for pair, distance_param in distance_parameters.items():
             cost = DistanceLowerBoundCost(
-                min_distance=min_distance,
+                min_distance=float(min_distance_ratio * distance_param[0]),
                 weight=bound_weight
             )
 
@@ -585,27 +566,24 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
         *,
         positions: np.ndarray,
         input_data: TrajectoryDataset,
-        measurement_weight: float = 1.0
+        measurement_weight: float
     ) -> list[MeasurementCostInfo]:
         """Build measurement costs (unchanged)."""
         costs: list[MeasurementCostInfo] = []
         n_frames = positions.shape[0]
 
-        for kp in self.skeleton.keypoints:
-            if kp.name not in input_data.data:
-                continue
+        for trajectory_name, trajectory in  input_data.data.items():
 
-            traj = input_data.data[kp.name]
-            kp_idx = self.get_keypoint_index(keypoint_name=kp.name)
+            kp_idx = self.skeleton.get_keypoint_index(keypoint_name=trajectory_name)
 
             for frame_idx in range(n_frames):
-                measured = traj.values[frame_idx]
+                measured = trajectory.data[frame_idx]
 
                 if np.isnan(measured).any():
                     continue
 
-                if traj.confidence is not None:
-                    weight = measurement_weight * traj.confidence[frame_idx]
+                if trajectory.confidence is not None:
+                    weight = measurement_weight * trajectory.confidence[frame_idx]
                 else:
                     weight = measurement_weight
 
@@ -617,9 +595,10 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
                 cost_info = MeasurementCostInfo(
                     cost=cost,
                     parameters=[positions[frame_idx, kp_idx]],
-                    keypoint_name=kp.name,
+                    keypoint_name=trajectory_name,
                     frame_index=frame_idx,
-                    weight=weight
+                    weight=weight,
+                    description="Measurement cost for keypoint {trajectory_name} at frame {frame_idx}"
                 )
                 costs.append(cost_info)
 
@@ -630,7 +609,7 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
         *,
         positions: np.ndarray,
         input_data: TrajectoryDataset,
-        config: object
+        config: SkeletonPipelineConfig
     ) -> SkeletonCostBuildResult:
         """Build all costs with optimized distances.
 
@@ -646,69 +625,67 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
 
         # Initialize distance parameters from data
         logger.info("Initializing distance parameters from input data...")
-        distance_params, initial_distances = self._initialize_distance_parameters(
+        distance_params, initial_distances = self._initialize_segment_lengths(
             input_data=input_data,
-            min_confidence=0.3
+            min_confidence=config.input_data_confidence_threshold,
+            segment_rigidity_threshold=config.rigidity_threshold
         )
         logger.info(f"Initialized {len(distance_params)} distance parameters")
 
-        # Extract config
-        rigidity_threshold = getattr(config, 'rigidity_threshold', 0.5)
-        stiffness_threshold = getattr(config, 'stiffness_threshold', 0.1)
-        smoothness_weight = getattr(config, 'smoothness_weight', 10.0)
-        measurement_weight = getattr(config, 'measurement_weight', 1.0)
-        distance_anchor_weight = getattr(config, 'distance_anchor_weight', 1.0)
-        distance_bound_weight = getattr(config, 'distance_bound_weight', 1000.0)
-        min_distance = getattr(config, 'min_distance', 0.01)
 
         # Build costs
         collection = CostCollection()
 
         # Segment rigidity (with optimized distances)
         logger.info("Building segment rigidity costs (optimized distances)...")
-        rigidity_costs = self.build_segment_rigidity_costs(
+        # rigidity_costs = self.build_segment_rigidity_costs(
+        #     positions=positions,
+        #     distance_parameters=distance_params,
+        #     base_weight=config.rigidity_weight
+        # )
+        rigidity_costs = self.build_segment_rigidity_costs_target_segment_lengths(
             positions=positions,
-            distance_parameters=distance_params,
-            rigidity_threshold=rigidity_threshold
+            target_lengths=initial_distances,
+            base_weight=config.rigidity_weight
         )
         collection.extend(costs=rigidity_costs)
         logger.info(f"  Added {len(rigidity_costs)} rigidity costs")
 
         # Linkage stiffness (with optimized distances)
-        logger.info("Building linkage stiffness costs (optimized distances)...")
-        stiffness_costs = self.build_linkage_stiffness_costs(
-            positions=positions,
-            distance_parameters=distance_params,
-            stiffness_threshold=stiffness_threshold
-        )
-        collection.extend(costs=stiffness_costs)
-        logger.info(f"  Added {len(stiffness_costs)} stiffness costs")
+        # logger.info("Building linkage stiffness costs (optimized distances)...")
+        # stiffness_costs = self.build_linkage_stiffness_costs(
+        #     positions=positions,
+        #     distance_parameters=distance_params,
+        #     stiffness_threshold=stiffness_threshold
+        # )
+        # collection.extend(costs=stiffness_costs)
+        # logger.info(f"  Added {len(stiffness_costs)} stiffness costs")
 
-        # Distance anchors (prevent drift)
-        logger.info("Building distance anchor costs...")
-        anchor_costs = self.build_distance_anchor_costs(
-            distance_parameters=distance_params,
-            initial_distances=initial_distances,
-            anchor_weight=distance_anchor_weight
-        )
-        collection.extend(costs=anchor_costs)
-        logger.info(f"  Added {len(anchor_costs)} distance anchor costs")
-
-        # Distance bounds (prevent collapse)
-        logger.info("Building distance bound costs...")
-        bound_costs = self.build_distance_bound_costs(
-            distance_parameters=distance_params,
-            min_distance=min_distance,
-            bound_weight=distance_bound_weight
-        )
-        collection.extend(costs=bound_costs)
-        logger.info(f"  Added {len(bound_costs)} distance bound costs")
+        # # Distance anchors (prevent drift)
+        # logger.info("Building distance anchor costs...")
+        # anchor_costs = self.build_distance_anchor_costs(
+        #     distance_parameters=distance_params,
+        #     initial_distances=initial_distances,
+        #     anchor_weight=config.distance_anchor_weight
+        # )
+        # collection.extend(costs=anchor_costs)
+        # logger.info(f"  Added {len(anchor_costs)} distance anchor costs")
+        #
+        # # Distance bounds (prevent collapse)
+        # logger.info("Building distance bound costs...")
+        # bound_costs = self.build_distance_bound_costs(
+        #     distance_parameters=distance_params,
+        #     min_distance_ratio=config.segment_length_change_threshold,
+        #     bound_weight=config.rigidity_weight *1000 # very high cost to prevent collapse
+        # )
+        # collection.extend(costs=bound_costs)
+        # logger.info(f"  Added {len(bound_costs)} distance bound costs")
 
         # Temporal smoothness
         logger.info("Building temporal smoothness costs...")
         smoothness_costs = self.build_temporal_smoothness_costs(
             positions=positions,
-            smoothness_weight=smoothness_weight
+            smoothness_weight=config.smoothness_weight
         )
         collection.extend(costs=smoothness_costs)
         logger.info(f"  Added {len(smoothness_costs)} smoothness costs")
@@ -718,7 +695,7 @@ class SkeletonCostBuilder(BaseCostBuilder[SkeletonConstraint]):
         measurement_costs = self.build_measurement_costs(
             positions=positions,
             input_data=input_data,
-            measurement_weight=measurement_weight
+            measurement_weight=config.measurement_weight
         )
         collection.extend(costs=measurement_costs)
         logger.info(f"  Added {len(measurement_costs)} measurement costs")

@@ -85,14 +85,14 @@ class TrajectoryND(ABaseModel):
 
     Attributes:
         name: Identifier for this trajectory
-        values: (n_frames, n_dims) values over time
+        data: (n_frames, n_dims) values over time
         trajectory_type: Mathematical domain of the data
         confidence: Optional (n_frames,) confidence scores [0-1]
         metadata: Optional additional data
     """
 
     name: str
-    values: np.ndarray
+    data: np.ndarray
     trajectory_type: TrajectoryType = TrajectoryType.GENERIC
     confidence: np.ndarray | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -102,9 +102,9 @@ class TrajectoryND(ABaseModel):
         """Validate trajectory data."""
         # Check confidence length matches values
         if self.confidence is not None:
-            if len(self.confidence) != len(self.values):
+            if len(self.confidence) != len(self.data):
                 raise ValueError(
-                    f"Confidence length {len(self.confidence)} != values length {len(self.values)}"
+                    f"Confidence length {len(self.confidence)} != values length {len(self.data)}"
                 )
 
         # Check dimensions match trajectory type
@@ -117,7 +117,7 @@ class TrajectoryND(ABaseModel):
 
         # Validate quaternions are normalized
         if self.trajectory_type == TrajectoryType.QUATERNION:
-            norms = np.linalg.norm(self.values, axis=1)
+            norms = np.linalg.norm(self.data, axis=1)
             if not np.allclose(norms, 1.0, atol=1e-3):
                 logger.warning(
                     f"Quaternion trajectory '{self.name}' contains non-normalized quaternions. "
@@ -129,12 +129,12 @@ class TrajectoryND(ABaseModel):
     @property
     def n_frames(self) -> int:
         """Number of frames in trajectory."""
-        return len(self.values)
+        return len(self.data)
 
     @property
     def n_dims(self) -> int:
         """Number of dimensions."""
-        return self.values.shape[1] if len(self.values.shape) > 1 else 1
+        return self.data.shape[1] if len(self.data.shape) > 1 else 1
 
     def is_valid(self, *, min_confidence: float = 0.3) -> np.ndarray:
         """Get mask of valid frames.
@@ -147,11 +147,11 @@ class TrajectoryND(ABaseModel):
         """
         if self.confidence is None:
             # If no confidence, check for NaN
-            return ~np.isnan(self.values[:, 0])
+            return ~np.isnan(self.data[:, 0])
 
         # Valid if confidence above threshold AND not NaN
         above_threshold = self.confidence >= min_confidence
-        not_nan = ~np.isnan(self.values[:, 0])
+        not_nan = ~np.isnan(self.data[:, 0])
         return above_threshold & not_nan
 
     def get_valid_values(self, *, min_confidence: float = 0.3) -> np.ndarray:
@@ -164,7 +164,7 @@ class TrajectoryND(ABaseModel):
             (n_valid, n_dims) valid values
         """
         mask = self.is_valid(min_confidence=min_confidence)
-        return self.values[mask]
+        return self.data[mask]
 
     def get_centroid(self, *, min_confidence: float = 0.3) -> np.ndarray:
         """Compute centroid of valid values.
@@ -189,10 +189,10 @@ class TrajectoryND(ABaseModel):
         Returns:
             New TrajectoryND with interpolated values
         """
-        values_interp = self.values.copy()
+        values_interp = self.data.copy()
 
         for axis in range(self.n_dims):
-            data = self.values[:, axis]
+            data = self.data[:, axis]
             valid_mask = ~np.isnan(data)
 
             if np.sum(valid_mask) < 2:
@@ -219,7 +219,7 @@ class TrajectoryND(ABaseModel):
 
         return TrajectoryND(
             name=self.name,
-            values=values_interp,
+            data=values_interp,
             trajectory_type=self.trajectory_type,
             confidence=self.confidence,
             metadata=self.metadata
@@ -307,7 +307,7 @@ class TrajectoryDataset(ABaseModel):
         """
         sliced_data = {}
         for name, traj in self.data.items():
-            sliced_values = traj.values[start_frame:end_frame].copy()
+            sliced_values = traj.data[start_frame:end_frame].copy()
             sliced_confidence = (
                 traj.confidence[start_frame:end_frame].copy()
                 if traj.confidence is not None
@@ -316,7 +316,7 @@ class TrajectoryDataset(ABaseModel):
 
             sliced_data[name] = TrajectoryND(
                 name=name,
-                values=sliced_values,
+                data=sliced_values,
                 trajectory_type=traj.trajectory_type,
                 confidence=sliced_confidence,
                 metadata=traj.metadata
@@ -352,7 +352,7 @@ class TrajectoryDataset(ABaseModel):
             raise ValueError(f"Markers not in dataset: {missing}")
 
         # Stack values
-        arrays = [self.data[name].values for name in marker_names]
+        arrays = [self.data[name].data for name in marker_names]
         result = np.stack(arrays, axis=1)
 
         if fill_missing:
@@ -411,12 +411,12 @@ class TrajectoryDataset(ABaseModel):
         # Filter each trajectory
         filtered_data = {}
         for name, traj in self.data.items():
-            filtered_values = traj.values[valid_mask]
+            filtered_values = traj.data[valid_mask]
             filtered_confidence = traj.confidence[valid_mask] if traj.confidence is not None else None
 
             filtered_data[name] = TrajectoryND(
                 name=name,
-                values=filtered_values,
+                data=filtered_values,
                 trajectory_type=traj.trajectory_type,
                 confidence=filtered_confidence,
                 metadata=traj.metadata
@@ -461,7 +461,7 @@ class TrajectoryDataset(ABaseModel):
         all_values = []
         for traj in self.data.values():
             valid_mask = traj.is_valid(min_confidence=min_confidence)
-            values_copy = traj.values.copy()
+            values_copy = traj.data.copy()
             values_copy[~valid_mask] = np.nan
             all_values.append(values_copy)
 
@@ -529,7 +529,7 @@ class TrajectoryDataset(ABaseModel):
                 if chunk_idx == 0:
                     # First chunk: copy directly (no blending)
                     blend_end = chunk_end - overlap_size if chunk_idx < len(datasets) - 1 else chunk_end
-                    stitched_values[chunk_start:blend_end] = chunk_traj.values[:blend_end - chunk_start]
+                    stitched_values[chunk_start:blend_end] = chunk_traj.data[:blend_end - chunk_start]
 
                     logger.debug(f"Marker {marker_name}, Chunk 0: Copied frames {chunk_start}-{blend_end}")
 
@@ -552,8 +552,8 @@ class TrajectoryDataset(ABaseModel):
                     curr_local_start = blend_global_start - chunk_start
                     curr_local_end = blend_global_end - chunk_start
 
-                    prev_values = prev_traj.values[prev_local_start:prev_local_end]
-                    curr_values = chunk_traj.values[curr_local_start:curr_local_end]
+                    prev_values = prev_traj.data[prev_local_start:prev_local_end]
+                    curr_values = chunk_traj.data[curr_local_start:curr_local_end]
 
                     # Blend using trajectory type-specific method
                     blended = cls._blend_by_type(
@@ -579,7 +579,7 @@ class TrajectoryDataset(ABaseModel):
                         local_copy_end = copy_end - chunk_start
 
                         stitched_values[copy_start:copy_end] = (
-                            chunk_traj.values[local_copy_start:local_copy_end]
+                            chunk_traj.data[local_copy_start:local_copy_end]
                         )
 
                         logger.debug(
@@ -590,7 +590,7 @@ class TrajectoryDataset(ABaseModel):
             # Create stitched trajectory for this marker
             stitched_data[marker_name] = TrajectoryND(
                 name=marker_name,
-                values=stitched_values,
+                data=stitched_values,
                 trajectory_type=traj_type,
                 confidence=None,  # Confidence not preserved during stitching
                 metadata=first_dataset.data[marker_name].metadata

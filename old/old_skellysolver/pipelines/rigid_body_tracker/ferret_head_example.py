@@ -4,11 +4,12 @@ from pathlib import Path
 import logging
 import numpy as np
 
-from python_code.rigid_body_tracker.core.topology import RigidBodyTopology
-from python_code.rigid_body_tracker.core.optimization import OptimizationConfig
-from python_code.rigid_body_tracker.api import TrackingConfig, process_tracking_data
-from python_code.rigid_body_tracker.io.loaders import load_trajectories
-from python_code.rigid_body_tracker.io.savers import save_results
+from old.old_skellysolver.core.rigid_body_optimization import OptimizationConfig
+from old.old_skellysolver.core.savers import save_results
+from old.old_skellysolver.core.topology import RigidBodyTopology
+from old.old_skellysolver.io.loaders import load_trajectories
+from old.old_skellysolver.pipelines.rigid_body_tracker.process_rigid_body_trajectories import TrackingConfig, \
+    process_tracking_data
 
 logger = logging.getLogger(__name__)
 

@@ -80,7 +80,7 @@ config = OptimizationConfig(max_iterations=10)
 optimizer = Optimizer(config=config)
 
 quat = np.array([1.0, 0.0, 0.0, 0.0])
-optimizer.add_quaternion_parameter(name="test", parameters=quat)
+optimizer.add_quaternion_parameter(name="test", parameter=quat)
 
 print(f"✓ Optimizer created with {optimizer.num_parameters()} parameters")
 print("\n✓ Phase 1 installation verified!")
@@ -115,7 +115,7 @@ quaternions = [np.array([1.0, 0.0, 0.0, 0.0]) for _ in range(n_frames)]
 
 # Add as parameters
 for i, q in enumerate(quaternions):
-    optimizer.add_quaternion_parameter(name=f"quat_{i}", parameters=q)
+    optimizer.add_quaternion_parameter(name=f"quat_{i}", parameter=q)
 
 # Add smoothness costs
 for i in range(n_frames - 1):

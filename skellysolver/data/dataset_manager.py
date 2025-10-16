@@ -92,7 +92,7 @@ class DatasetManager(BaseModel):
 
         rows = []
         for marker_name, trajectory in dataset.data.items():
-            for frame_idx, values in zip(dataset.frame_indices, trajectory.values):
+            for frame_idx, values in zip(dataset.frame_indices, trajectory.data):
                 if trajectory.n_dims == 2:
                     x, y = values
                     z = self.default_z
@@ -348,7 +348,7 @@ class DatasetManager(BaseModel):
 
             trajectory_objects[name] = TrajectoryND(
                 name=name,
-                values=values,
+                data=values,
                 confidence=conf,
                 metadata={}
             )

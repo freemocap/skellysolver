@@ -15,30 +15,12 @@ import numpy as np
 
 from skellysolver.data.dataset_manager import save_trajectory_csv
 from skellysolver.data.trajectory_dataset import TrajectoryDataset, TrajectoryND, TrajectoryType
-from skellysolver.pipelines.base_pipeline import BasePipeline, PipelineConfig
+from skellysolver.pipelines.base_pipeline import BasePipeline
 from skellysolver.pipelines.skeleton_pipeline.skeleton_cost_builder import SkeletonCostBuilder
-from skellysolver.solvers.base_solver import SolverResult, SolverConfig, PyceresSolver
-from skellysolver.solvers.constraints.skeleton_constraint import SkeletonConstraint
-from skellysolver.utilities.chunk_processor import ChunkProcessor
+from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline_config import SkeletonPipelineConfig
+from skellysolver.solvers.base_solver import SolverResult, PyceresProblemSolver
 
 logger = logging.getLogger(__name__)
-
-
-class SkeletonSolverConfig(SolverConfig):
-    """Configuration for skeleton keypoint solving."""
-    pass
-
-
-class SkeletonPipelineConfig(PipelineConfig):
-    """Configuration for skeleton keypoint pipeline."""
-    skeleton: SkeletonConstraint
-    solver_config: SkeletonSolverConfig
-
-    # Cost weights
-    rigidity_threshold: float = 0.5
-    stiffness_threshold: float = 0.1
-    smoothness_weight: float = 10.0
-    measurement_weight: float = 1.0
 
 
 class SkeletonSolverResult(SolverResult):
@@ -50,66 +32,9 @@ class SkeletonPipeline(BasePipeline):
     """Pipeline for direct keypoint trajectory optimization."""
     config: SkeletonPipelineConfig
 
-    def _initialize_positions(
-        self,
-        *,
-        input_data: TrajectoryDataset
-    ) -> np.ndarray:
-        """Initialize position parameters from input data.
 
-        Args:
-            input_data: Measured trajectories
 
-        Returns:
-            (n_frames, n_keypoints, 3) initial positions
-        """
-        n_frames = input_data.n_frames
-        n_keypoints = len(self.config.skeleton.keypoints)
-
-        # Extract keypoint names in skeleton order
-        keypoint_names = [kp.name for kp in self.config.skeleton.keypoints]
-
-        # Initialize with measured data (NaNs will be handled)
-        positions = np.zeros((n_frames, n_keypoints, 3))
-
-        for kp_idx, kp_name in enumerate(keypoint_names):
-            if kp_name not in input_data.data:
-                logger.warning(f"Keypoint '{kp_name}' not found in input data")
-                continue
-
-            traj = input_data.data[kp_name]
-            positions[:, kp_idx, :] = traj.values
-
-        # Interpolate any NaNs for initialization
-        for kp_idx in range(n_keypoints):
-            for axis in range(3):
-                data = positions[:, kp_idx, axis]
-                valid_mask = ~np.isnan(data)
-
-                if not np.any(valid_mask):
-                    # No valid data - use zeros
-                    positions[:, kp_idx, axis] = 0.0
-                    continue
-
-                if np.all(valid_mask):
-                    # All valid - nothing to do
-                    continue
-
-                # Interpolate missing values
-                valid_indices = np.where(valid_mask)[0]
-                valid_values = data[valid_mask]
-
-                missing_indices = np.where(~valid_mask)[0]
-                positions[missing_indices, kp_idx, axis] = np.interp(
-                    x=missing_indices,
-                    xp=valid_indices,
-                    fp=valid_values
-                )
-
-        logger.info(f"Initialized positions: {positions.shape}")
-        return positions
-
-    def setup_and_solve(
+    def setup_problem_and_solve(
         self,
         input_data: TrajectoryDataset
     ) -> SolverResult:
@@ -129,10 +54,10 @@ class SkeletonPipeline(BasePipeline):
         )
 
         # Initialize positions from measurements
-        positions = self._initialize_positions(input_data=input_data)
+        positions = input_data.to_array()
 
         # Create solver
-        solver = PyceresSolver(config=self.config.solver_config)
+        solver = PyceresProblemSolver(config=self.config.solver_config)
 
         # Add position parameters to solver
         logger.info("Adding position parameters...")
@@ -206,7 +131,7 @@ class SkeletonPipeline(BasePipeline):
         for kp_idx, kp_name in enumerate(keypoint_names):
             optimized_trajectories[kp_name] = TrajectoryND(
                 name=kp_name,
-                values=positions[:, kp_idx, :].copy(),
+                data=positions[:, kp_idx, :].copy(),
                 trajectory_type=TrajectoryType.POSITION,
                 confidence=None,  # Confidence not preserved
                 metadata={}
@@ -228,7 +153,7 @@ class SkeletonPipeline(BasePipeline):
         #     input_data=self.input_data,
         #     setup_and_solve_fn=self.setup_and_solve,
         # )
-        self.solver_result = self.setup_and_solve(input_data=self.input_data)
+        self.solver_result = self.setup_problem_and_solve(input_data=self.input_data)
         raw_csv_path = self.config.output_dir / "raw_trajectories.csv"
         save_trajectory_csv(
             dataset=self.input_data,

@@ -231,7 +231,7 @@ class SolverConfig(ABaseModel):
         return "\n".join(lines)
 
 
-class PyceresSolver(ABaseModel):
+class PyceresProblemSolver(ABaseModel):
     """Generic pyceres solver wrapper.
 
     Provides high-level interface to pyceres for all pipelines.
@@ -285,23 +285,24 @@ class PyceresSolver(ABaseModel):
             self,
             *,
             name: str,
-            parameters: np.ndarray
+            parameter: np.ndarray
     ) -> None:
         """Add quaternion parameter with manifold constraint.
 
-        Convenience method for quaternion parameters.
+        Convenience method for quaternion parameters, automatically
+        applies unit-norm manifold.
 
         Args:
             name: Identifier for this parameter block
-            parameters: (4,) quaternion array
+            parameter: (4,) quaternion array
         """
-        if len(parameters) != 4:
-            raise ValueError(f"Quaternion must have 4 elements, got {len(parameters)}")
+        if len(parameter) != 4:
+            raise ValueError(f"Quaternion must have 4 elements, got {len(parameter)}")
 
         manifold = get_quaternion_manifold()
         self.add_parameter_block(
             name=name,
-            parameters=parameters,
+            parameters=parameter,
             manifold=manifold
         )
 

@@ -9,7 +9,9 @@ import logging
 
 from skellysolver.utilities.chunk_processor import ChunkingConfig
 from skellysolver.pipelines.skeleton_pipeline.skeleton_definitions.ferret_skeleton_v1 import FERRET_SKELETON_V1
-from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline import SkeletonPipelineConfig, SkeletonPipeline, SkeletonSolverConfig
+from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline import SkeletonPipeline
+from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline_config import SkeletonSolverConfig, \
+    SkeletonPipelineConfig
 from skellysolver.pipelines.base_pipeline import PipelineConfig
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s | %(message)s')

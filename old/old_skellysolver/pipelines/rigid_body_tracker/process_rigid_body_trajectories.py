@@ -6,23 +6,14 @@ from dataclasses import dataclass
 import numpy as np
 import multiprocessing as mp
 
-from python_code.rigid_body_tracker.core.topology import RigidBodyTopology
-from python_code.rigid_body_tracker.core.optimization import (
-    OptimizationConfig,
-    optimize_rigid_body,
-    OptimizationResult
-)
-from python_code.rigid_body_tracker.core.parallel_opt import (
-    optimize_chunked_parallel,
-    estimate_parallel_speedup
-)
-from python_code.rigid_body_tracker.core.chunking import ChunkConfig
-from python_code.rigid_body_tracker.io.loaders import load_trajectories
-from python_code.rigid_body_tracker.io.savers import (
-    save_results,
-    save_evaluation_report
-)
-from python_code.rigid_body_tracker.core.metrics import evaluate_reconstruction
+from old.old_skellysolver.core.chunking import ChunkConfig
+from old.old_skellysolver.core.metrics import evaluate_reconstruction
+from old.old_skellysolver.core.parallel_opt import optimize_chunked_parallel
+from old.old_skellysolver.core.rigid_body_optimization import OptimizationConfig, OptimizationResult, \
+    optimize_rigid_body
+from old.old_skellysolver.core.savers import save_results, save_evaluation_report
+from old.old_skellysolver.core.topology import RigidBodyTopology
+from old.old_skellysolver.io.loaders import load_trajectories
 
 logger = logging.getLogger(__name__)
 
@@ -188,16 +179,6 @@ def process_tracking_data(*, config: TrackingConfig) -> OptimizationResult:
         logger.info("="*80)
         logger.info(f"Workers: {n_workers}")
 
-        estimate = estimate_parallel_speedup(
-            n_frames=n_frames,
-            chunk_size=chunk_config.chunk_size,
-            n_workers=n_workers
-        )
-        logger.info(f"\nParallel processing estimate:")
-        logger.info(f"  Chunks: {estimate['n_chunks']}")
-        logger.info(f"  Sequential time: ~{estimate['sequential_time_minutes']:.1f} min")
-        logger.info(f"  Parallel time: ~{estimate['parallel_time_minutes']:.1f} min")
-        logger.info(f"  Expected speedup: {estimate['speedup']:.1f}x")
 
     # =========================================================================
     # STEP 5: OPTIMIZE

@@ -268,7 +268,7 @@ optimizer = Optimizer(config=config)
 for i in range(n_frames):
     optimizer.add_quaternion_parameter(
         name=f"quat_{i}",
-        parameters=quaternions[i]
+        parameter=quaternions[i]
     )
     optimizer.add_parameter_block(
         name=f"trans_{i}",

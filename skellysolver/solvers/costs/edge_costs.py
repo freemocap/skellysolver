@@ -35,9 +35,8 @@ class RigidEdgeCost(BaseCostFunction):
         *,
         marker_i: int,
         marker_j: int,
-        n_markers: int,
         target_distance: float,
-        weight: float = 500.0
+        weight: float
     ) -> None:
         """Initialize rigid edge cost.
         
@@ -51,10 +50,9 @@ class RigidEdgeCost(BaseCostFunction):
         super().__init__(weight=weight)
         self.marker_i = marker_i
         self.marker_j = marker_j
-        self.n_markers = n_markers
         self.target_dist = target_distance
         self.set_num_residuals(1)
-        self.set_parameter_block_sizes([n_markers * 3])
+        self.set_parameter_block_sizes([3,3]) # Two markers, each with 3 coords
     
     def _compute_residual(
         self,
@@ -103,7 +101,7 @@ class SoftEdgeCost(BaseCostFunction):
         marker_idx: int,
         n_markers: int,
         target_distance: float,
-        weight: float = 10.0
+        weight: float
     ) -> None:
         """Initialize soft edge cost.
         

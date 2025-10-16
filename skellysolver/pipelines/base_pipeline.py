@@ -8,7 +8,7 @@ from typing_extensions import Self
 from skellysolver.utilities.arbitrary_types_model import ABaseModel
 from skellysolver.data.dataset_manager import load_trajectory_csv, save_solver_result
 from skellysolver.data.trajectory_dataset import TrajectoryDataset
-from skellysolver.solvers.base_solver import SolverResult, SolverOptimizationReport, PyceresSolver, SolverConfig
+from skellysolver.solvers.base_solver import SolverResult, SolverOptimizationReport, PyceresProblemSolver, SolverConfig
 from skellysolver.utilities.chunk_processor import ChunkingConfig, ChunkProcessor
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ class BasePipeline(ABaseModel, ABC):
         )
 
     @abstractmethod
-    def setup_and_solve(self, chunk_data: TrajectoryDataset) -> SolverResult:
+    def setup_problem_and_solve(self, chunk_data: TrajectoryDataset) -> SolverResult:
         """Setup solver and solve for a chunk of data.
 
         This method is called for each chunk (or once for non-chunked data).
@@ -107,7 +107,7 @@ class BasePipeline(ABaseModel, ABC):
         chunk_processor = ChunkProcessor(config=self.config.parallel)
         self.solver_result = chunk_processor.chunk_run_pipeline(
             input_data=self.input_data,
-            setup_and_solve_fn=self.setup_and_solve,
+            setup_and_solve_fn=self.setup_problem_and_solve,
         )
 
         save_solver_result(
@@ -115,7 +115,7 @@ class BasePipeline(ABaseModel, ABC):
             save_directory=self.config.output_dir
         )
 
-        logger.info(f"\n{self.solver_result.summary()}")
+        logger.info(f"\n{self.solver_result.summary.FullReport()}")
 
     def generate_viewer(self) -> None:
         raise NotImplementedError

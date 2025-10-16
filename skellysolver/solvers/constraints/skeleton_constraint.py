@@ -21,6 +21,12 @@ class SkeletonConstraint(BaseConstraint):
     def root(self) -> KeypointConstraint:
         return self.keypoints[0]
 
+    def get_keypoint_index(self, *, keypoint_name: str) -> int:
+        for i, kp in enumerate(self.keypoints):
+            if kp.name == keypoint_name:
+                return i
+        raise ValueError(f"Keypoint '{keypoint_name}' not found")
+
     @model_validator(mode="after")
     def validate(self) -> "SkeletonConstraint":
         if len(self.keypoints) == 0:

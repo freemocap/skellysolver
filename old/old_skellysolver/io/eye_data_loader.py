@@ -65,9 +65,9 @@ class EyeTrackingData(BaseModel):
                 y_col = (name, "y")
                 conf_col = (name, "likelihood")
 
-                x = df[x_col].values
-                y = df[y_col].values
-                conf = df[conf_col].values
+                x = df[x_col].data
+                y = df[y_col].data
+                conf = df[conf_col].data
 
                 valid = conf >= min_confidence
                 pupil_points[valid, i, 0] = x[valid]
@@ -75,9 +75,9 @@ class EyeTrackingData(BaseModel):
             except KeyError:
                 # Try alternative column naming
                 try:
-                    x = df[f"{name}_x"].values
-                    y = df[f"{name}_y"].values
-                    conf = df[f"{name}_likelihood"].values
+                    x = df[f"{name}_x"].data
+                    y = df[f"{name}_y"].data
+                    conf = df[f"{name}_likelihood"].data
 
                     valid = conf >= min_confidence
                     pupil_points[valid, i, 0] = x[valid]
@@ -94,18 +94,18 @@ class EyeTrackingData(BaseModel):
             y_col = ("tear_duct", "y")
             conf_col = ("tear_duct", "likelihood")
 
-            x = df[x_col].values
-            y = df[y_col].values
-            conf = df[conf_col].values
+            x = df[x_col].data
+            y = df[y_col].data
+            conf = df[conf_col].data
 
             valid = conf >= min_confidence
             tear_ducts[valid, 0] = x[valid]
             tear_ducts[valid, 1] = y[valid]
         except KeyError:
             try:
-                x = df["tear_duct_x"].values
-                y = df["tear_duct_y"].values
-                conf = df["tear_duct_likelihood"].values
+                x = df["tear_duct_x"].data
+                y = df["tear_duct_y"].data
+                conf = df["tear_duct_likelihood"].data
 
                 valid = conf >= min_confidence
                 tear_ducts[valid, 0] = x[valid]

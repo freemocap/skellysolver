@@ -14,8 +14,9 @@ from skellysolver.data.trajectory_dataset import TrajectoryDataset, TrajectoryTy
 from skellysolver.pipelines.skeleton_pipeline.skeleton_definitions.synthetic_cube_skeleton_v1 import (
     SYNTHETIC_CUBE_SKELETON
 )
-from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline import SkeletonPipeline, SkeletonPipelineConfig, \
-    SkeletonSolverConfig
+from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline import SkeletonPipeline
+from skellysolver.pipelines.skeleton_pipeline.skeleton_pipeline_config import SkeletonSolverConfig, \
+    SkeletonPipelineConfig
 from skellysolver.pipelines.skeleton_pipeline.skeleton_viewer_generator import generate_skeleton_viewer
 from skellysolver.utilities.chunk_processor import ChunkingConfig
 
@@ -186,7 +187,7 @@ def run_synthetic_cube_keypoint_demo() -> None:
 
     ground_truth, noisy = generate_synthetic_trajectory(
         reference_positions=reference,
-        n_frames=100,  # Fewer frames for faster demo
+        n_frames=200,
         noise_std=0.05,
         random_seed=42,
         wiggle_amplitude=0.3,
@@ -208,9 +209,9 @@ def run_synthetic_cube_keypoint_demo() -> None:
     for kp_name, positions in noisy.items():
         trajectory_data[kp_name] = TrajectoryND(
             name=kp_name,
-            values=positions,
+            data=positions,
             trajectory_type=TrajectoryType.POSITION,
-            confidence=None,
+            confidence=np.ones((n_frames,)),
             metadata={}
         )
 
@@ -225,7 +226,7 @@ def run_synthetic_cube_keypoint_demo() -> None:
     for kp_name, positions in ground_truth.items():
         gt_trajectory_data[kp_name] = TrajectoryND(
             name=kp_name,
-            values=positions,
+            data=positions,
             trajectory_type=TrajectoryType.POSITION,
             confidence=None,
             metadata={}
@@ -253,7 +254,7 @@ def run_synthetic_cube_keypoint_demo() -> None:
     )
 
     chunking_config = ChunkingConfig(
-        chunk_size=100,  # No chunking for this demo
+        chunk_size=200,
         overlap_size=0,
         blend_window=0,
     )
@@ -284,7 +285,7 @@ def run_synthetic_cube_keypoint_demo() -> None:
         for kp_name in reference.keys():
             traj = result.optimized_data.data.get(kp_name)
             if traj is not None:
-                reconstructed[kp_name] = traj.values
+                reconstructed[kp_name] = traj.data
 
         metrics = compute_reconstruction_metrics(
             ground_truth=ground_truth,
