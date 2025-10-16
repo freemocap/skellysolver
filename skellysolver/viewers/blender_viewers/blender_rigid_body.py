@@ -152,7 +152,7 @@ def load_tidy_csv(
 
     # Get sorted frames and markers
     frame_indices = sorted(frame_set)
-    marker_names = sorted(data_dict.keys())
+    marker_names = list(data_dict.keys())
     n_frames = len(frame_indices)
     n_markers = len(marker_names)
 
@@ -206,7 +206,7 @@ def create_marker_material(
     emission_strength: float = 0.5
 ) -> bpy.types.Material:
     """Create a material for markers."""
-    mat = bpy.raw_trajectories.materials.new(name=name)
+    mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
 
     nodes = mat.node_tree.nodes
@@ -242,7 +242,7 @@ def create_edge_material(
     roughness: float = 0.2
 ) -> bpy.types.Material:
     """Create a material for edges."""
-    mat = bpy.raw_trajectories.materials.new(name=name)
+    mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
 
     nodes = mat.node_tree.nodes
@@ -289,10 +289,10 @@ def create_sphere_marker(
     sphere.name = name
     sphere.parent = parent
 
-    if sphere.raw_trajectories.materials:
-        sphere.raw_trajectories.materials[0] = material
+    if sphere.data.materials:
+        sphere.data.materials[0] = material
     else:
-        sphere.raw_trajectories.materials.append(material)
+        sphere.data.materials.append(material)
 
     bpy.ops.object.shade_smooth()
 
@@ -314,7 +314,7 @@ def create_edge_curves(
     if not edges:
         return None
 
-    curve_data = bpy.raw_trajectories.curves.new(name=f"{name}_Curve", type='CURVE')
+    curve_data = bpy.data.curves.new(name=f"{name}_Curve", type='CURVE')
     curve_data.dimensions = '3D'
     curve_data.bevel_depth = radius
     curve_data.bevel_resolution = 4
@@ -322,7 +322,7 @@ def create_edge_curves(
     curve_data.fill_mode = 'FULL'
     curve_data.use_fill_caps = True
 
-    curve_obj = bpy.raw_trajectories.objects.new(name=name, object_data=curve_data)
+    curve_obj = bpy.data.objects.new(name=name, object_data=curve_data)
     bpy.context.collection.objects.link(object=curve_obj)
     curve_obj.parent = parent
 
@@ -330,10 +330,10 @@ def create_edge_curves(
     curve_obj.show_all_edges = False
     curve_obj.display_type = 'TEXTURED'
 
-    if curve_obj.raw_trajectories.materials:
-        curve_obj.raw_trajectories.materials[0] = material
+    if curve_obj.data.materials:
+        curve_obj.data.materials[0] = material
     else:
-        curve_obj.raw_trajectories.materials.append(material)
+        curve_obj.data.materials.append(material)
 
     for edge_idx, (i, j) in enumerate(edges):
         marker_i_name = marker_names[i]
@@ -412,7 +412,7 @@ def create_trajectory_curves(
     if len(valid_positions) < 2:
         return None
 
-    curve_data = bpy.raw_trajectories.curves.new(name=f"{name}_{marker_name}_Trail", type='CURVE')
+    curve_data = bpy.data.curves.new(name=f"{name}_{marker_name}_Trail", type='CURVE')
     curve_data.dimensions = '3D'
     curve_data.bevel_depth = radius
     curve_data.bevel_resolution = 3
@@ -420,14 +420,14 @@ def create_trajectory_curves(
     curve_data.fill_mode = 'FULL'
     curve_data.use_fill_caps = True
 
-    curve_obj = bpy.raw_trajectories.objects.new(name=f"{name}_{marker_name}", object_data=curve_data)
+    curve_obj = bpy.data.objects.new(name=f"{name}_{marker_name}", object_data=curve_data)
     bpy.context.collection.objects.link(object=curve_obj)
     curve_obj.parent = parent
 
-    if curve_obj.raw_trajectories.materials:
-        curve_obj.raw_trajectories.materials[0] = material
+    if curve_obj.data.materials:
+        curve_obj.data.materials[0] = material
     else:
-        curve_obj.raw_trajectories.materials.append(material)
+        curve_obj.data.materials.append(material)
 
     # Create spline with all valid positions
     spline = curve_data.splines.new(type='POLY')
@@ -668,17 +668,20 @@ def create_rigid_body_visualization(
     return parent, markers, traj_data, topology
 
 
+# ============================================================================
+# EXAMPLE USAGE
+# ============================================================================
 
 # Example usage
 config = RigidBodyConfig(
     csv_path=Path(
-        r"/examples/output/ferret_skull_tracking_EO5/trajectory_data.csv"
+        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\trajectories.csv"
     ),
     topology_path=Path(
-        r"/examples/output/ferret_skull_tracking_EO5/topology.json"
+        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\topology.json"
     ),
     raw_csv_path=Path(
-        r"/examples/output/ferret_skull_tracking_EO5/raw_trajectory_data.csv"
+        r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s\raw_trajectories.csv"
     ),
     data_scale=0.001,  # mm to meters
     sphere_radius=0.003,

@@ -131,7 +131,7 @@ def run_ferret_skull_solver() -> None:
 
     logger.info(f"\nLoading data from: {input_csv.name}")
 
-    trajectory_dict = load_trajectories(
+    raw_trajectory_dict = load_trajectories(
         filepath=input_csv,
         scale_factor=1.0,
         z_value=0.0
@@ -149,7 +149,7 @@ def run_ferret_skull_solver() -> None:
 
     # Extract spine data (keep as raw measurements)
     raw_spine_data = np.stack(
-        arrays=[trajectory_dict[name] for name in spine_marker_names],
+        arrays=[raw_trajectory_dict[name] for name in spine_marker_names],
         axis=1
     )
 
@@ -212,7 +212,7 @@ def run_ferret_skull_solver() -> None:
     # Get noisy data for all markers (skull + spine)
     all_marker_names = skull_marker_names + spine_marker_names
     noisy_all = np.stack(
-        arrays=[trajectory_dict[name] for name in all_marker_names],
+        arrays=[raw_trajectory_dict[name] for name in all_marker_names],
         axis=1
     )
 
