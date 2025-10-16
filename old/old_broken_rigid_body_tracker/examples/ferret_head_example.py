@@ -123,11 +123,13 @@ def run_ferret_skull_solver() -> None:
         r"\clips\1m_20s-2m_20s\mocap_data\output_data\processed_data"
         r"\head_spine_body_rigid_3d_xyz.csv"
     )
+    recording_name = "2025-07-01_ferret_757_EyeCameras_P33_EO5_1m_20s-2m_20s"
     # input_csv = Path(
     #     r"D:\bs\ferret_recordings\2025-07-11_ferret_757_EyeCameras_P43_E15__1"
     #     r"\clips\0m_37s-1m_37s\mocap_data\output_data"
     #     r"\output_data_head_body_eyecam_retrain_test_v2_model_outputs_iteration_1\dlc\dlc_body_rigid_3d_xyz.csv"
     # )
+    # recording_name = "2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s"
 
     logger.info(f"\nLoading data from: {input_csv.name}")
 
@@ -166,8 +168,7 @@ def run_ferret_skull_solver() -> None:
     config = TrackingConfig(
         input_csv=input_csv,
         topology=skull_topology,
-        # output_dir=Path("output/2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s"),
-        output_dir=Path("output/2025-07-01_ferret_757_EyeCameras_P33_EO5_1m_20s-2m_20s"),
+        output_dir=Path(f"output/{recording_name}"),
         optimization=OptimizationConfig(
             max_iter=100,
             lambda_data=100.0,       # Fit to measurements

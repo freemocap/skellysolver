@@ -8,7 +8,7 @@ import multiprocessing as mp
 from functools import partial
 import time
 
-from python_code.rigid_body_tracker.core.chunking import (
+from old.old_rigid_body_tracker.core.chunking import (
     ChunkConfig,
     split_into_chunks,
     blend_rotations,

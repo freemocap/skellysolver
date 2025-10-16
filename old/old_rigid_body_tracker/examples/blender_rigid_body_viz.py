@@ -1025,15 +1025,22 @@ def create_rigid_body_visualization(*, config: RigidBodyVisualizationConfig) -> 
     print("\nPress SPACE to play animation! ðŸŽ¬")
 
 
-# Example configuration
+# BASE_PATH = Path(r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-01_ferret_757_EyeCameras_P33_EO5_1m_20s-2m_20s")
+# TOPOLOGY_PATH = BASE_PATH / "topology.json"
+# CSV_PATH = BASE_PATH / "trajectory_data.csv"
+# TOY_CSV_PATH = Path(r"D:\bs\ferret_recordings\session_2025-07-01_ferret_757_EyeCameras_P33_EO5\clips\1m_20s-2m_20s\mocap_data\output_data\processed_data\toy_body_rigid_3d_xyz.csv")
+
+
+BASE_PATH = Path(r"C:\Users\jonma\github_repos\freemocap_organization\skellysolver\old\old_rigid_body_tracker\examples\output\2025-07-11_ferret_757_EyeCameras_P43_E15__1_0m_37s-1m_37s")
+TOPOLOGY_PATH = BASE_PATH / "topology.json"
+CSV_PATH = BASE_PATH / "trajectory_data.csv"
+TOY_CSV_PATH = None#Path(r"D:\bs\ferret_recordings\session_2025-07-01_ferret_757_EyeCameras_P33_EO5\clips\1m_20s-2m_20s\mocap_data\output_data\processed_data\toy_body_rigid_3d_xyz.csv")
+
 config = RigidBodyVisualizationConfig(
-    csv_path=Path(
-        r"/python_code/rigid_body_tracker/examples/output/ferret_skull_only_raw_spine_e05\trajectory_data.csv"
-    ),
-    topology_path=Path(
-        r"/python_code/rigid_body_tracker/examples/output/ferret_skull_only_raw_spine_e05\topology.json"
-    ),
-    data_type="optimized",  # or "noisy" or "gt"
+    csv_path=CSV_PATH,
+    topology_path=TOPOLOGY_PATH,
+    toy_csv_path=TOY_CSV_PATH,
+    data_type="optimized",
     data_scale=0.001,  # mm to meters
     sphere_radius=0.005,
     tube_radius=0.001,
@@ -1043,10 +1050,7 @@ config = RigidBodyVisualizationConfig(
     frame_start=0,
     keyframe_step=3,  # Set to 2-5 for even faster loading on long animations
 
-    # NEW: Toy data configuration
-    toy_csv_path=Path(
-        r"D:\bs\ferret_recordings\session_2025-07-01_ferret_757_EyeCameras_P33_EO5\clips\1m_20s-2m_20s\mocap_data\output_data\processed_data\toy_body_rigid_3d_xyz.csv"
-    ),
+
     toy_sphere_radius=0.01,  # Slightly larger than body markers
     toy_color=(1.0, 0.8, 0.0),  # Gold/yellow
 )

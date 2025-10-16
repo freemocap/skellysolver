@@ -5,10 +5,10 @@ import numpy as np
 import logging
 from scipy.spatial.transform import Rotation
 
-from python_code.rigid_body_tracker.core.topology import RigidBodyTopology
-from python_code.rigid_body_tracker.core.optimization import OptimizationConfig
-from python_code.rigid_body_tracker.api import TrackingConfig, process_tracking_data
-from python_code.rigid_body_tracker.io.savers import save_simple_csv
+from old.old_rigid_body_tracker.core.topology import RigidBodyTopology
+from old.old_rigid_body_tracker.core.optimization import OptimizationConfig
+from old.old_rigid_body_tracker.api import TrackingConfig, process_tracking_data
+from old.old_rigid_body_tracker.io.savers import save_simple_csv
 
 logger = logging.getLogger(__name__)
 

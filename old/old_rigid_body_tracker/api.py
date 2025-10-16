@@ -6,23 +6,23 @@ from dataclasses import dataclass
 import numpy as np
 import multiprocessing as mp
 
-from python_code.rigid_body_tracker.core.topology import RigidBodyTopology
-from python_code.rigid_body_tracker.core.optimization import (
+from old.old_rigid_body_tracker.core.topology import RigidBodyTopology
+from old.old_rigid_body_tracker.core.optimization import (
     OptimizationConfig,
     optimize_rigid_body,
     OptimizationResult
 )
-from python_code.rigid_body_tracker.core.parallel_opt import (
+from old.old_rigid_body_tracker.core.parallel_opt import (
     optimize_chunked_parallel,
     estimate_parallel_speedup
 )
-from python_code.rigid_body_tracker.core.chunking import ChunkConfig
-from python_code.rigid_body_tracker.io.loaders import load_trajectories
-from python_code.rigid_body_tracker.io.savers import (
+from old.old_rigid_body_tracker.core.chunking import ChunkConfig
+from old.old_rigid_body_tracker.io.loaders import load_trajectories
+from old.old_rigid_body_tracker.io.savers import (
     save_results,
     save_evaluation_report
 )
-from python_code.rigid_body_tracker.core.metrics import evaluate_reconstruction
+from old.old_rigid_body_tracker.core.metrics import evaluate_reconstruction
 
 logger = logging.getLogger(__name__)
 
