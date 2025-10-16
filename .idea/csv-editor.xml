@@ -24,6 +24,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="\examples\output\synthetic_cube_keypoint\trajectories.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\examples\output\synthetic_cube_skeleton\input_data.csv">
           <value>
             <Attribute>
